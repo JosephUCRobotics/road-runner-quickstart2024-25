@@ -22,8 +22,12 @@ import com.qualcomm.robotcore.eventloop.opmode.OpModeManager;
 import com.qualcomm.robotcore.eventloop.opmode.OpModeRegistrar;
 
 import org.firstinspires.ftc.robotcore.internal.opmode.OpModeMeta;
+import org.firstinspires.ftc.teamcode.ArmMover;
+import org.firstinspires.ftc.teamcode.Auto;
 import org.firstinspires.ftc.teamcode.MecanumDrive;
 import org.firstinspires.ftc.teamcode.TankDrive;
+import org.firstinspires.ftc.teamcode.TelopBlue;
+import org.firstinspires.ftc.teamcode.TelopRed;
 import org.firstinspires.ftc.teamcode.ThreeDeadWheelLocalizer;
 import org.firstinspires.ftc.teamcode.TwoDeadWheelLocalizer;
 import org.firstinspires.ftc.teamcode.encoderCheck;
@@ -167,6 +171,10 @@ public final class TuningOpModes {
 
         // added
         manager.register(metaForClass(encoderCheck.class), encoderCheck.class);
+        manager.register(metaForClass(TelopBlue.class), TelopBlue.class);
+        manager.register(metaForClass(TelopRed.class), TelopRed.class);
+        manager.register(metaForClass(Auto.class), Auto.class);
+        manager.register(metaForClass(ArmMover.class), ArmMover.class);
 
         FtcDashboard.getInstance().withConfigRoot(configRoot -> {
             for (Class<?> c : Arrays.asList(
