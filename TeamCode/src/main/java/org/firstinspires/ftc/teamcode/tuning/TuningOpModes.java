@@ -165,16 +165,14 @@ public final class TuningOpModes {
         manager.register(metaForClass(MecanumMotorDirectionDebugger.class), new MecanumMotorDirectionDebugger(dvf));
         manager.register(metaForClass(DeadWheelDirectionDebugger.class), new DeadWheelDirectionDebugger(dvf));
 
-        manager.register(metaForClass(ManualFeedbackTuner.class), ManualFeedbackTuner.class);
-        manager.register(metaForClass(SplineTest.class), SplineTest.class);
-        manager.register(metaForClass(LocalizationTest.class), LocalizationTest.class);
-
-        // added
-        manager.register(metaForClass(encoderCheck.class), encoderCheck.class);
-        manager.register(metaForClass(TelopBlue.class), TelopBlue.class);
-        manager.register(metaForClass(TelopRed.class), TelopRed.class);
-        manager.register(metaForClass(Auto.class), Auto.class);
-        manager.register(metaForClass(ArmMover.class), ArmMover.class);
+//        manager.register(metaForClass(ManualFeedbackTuner.class), ManualFeedbackTuner.class);
+//        manager.register(metaForClass(SplineTest.class), SplineTest.class);
+//        manager.register(metaForClass(LocalizationTest.class), LocalizationTest.class);
+//
+//        // added
+//        manager.register(metaForClass(encoderCheck.class), encoderCheck.class);
+//        manager.register(metaForClass(TelopRed.class), TelopRed.class);
+//        manager.register(metaForClass(ArmMover.class), ArmMover.class);
 
         FtcDashboard.getInstance().withConfigRoot(configRoot -> {
             for (Class<?> c : Arrays.asList(

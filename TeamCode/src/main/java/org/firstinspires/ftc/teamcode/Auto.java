@@ -18,194 +18,212 @@ import com.acmerobotics.roadrunner.TranslationalVelConstraint;
 import com.acmerobotics.roadrunner.Vector2d;
 import com.acmerobotics.roadrunner.VelConstraint;
 import com.acmerobotics.roadrunner.ftc.Actions;
+import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
+import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.ColorSensor;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.Servo;
+import com.qualcomm.robotcore.util.ElapsedTime;
 
 import org.firstinspires.ftc.teamcode.tuning.TuningOpModes;
-
+@Autonomous(name = "Auto", group = "A")
 public final class Auto extends LinearOpMode {
     public class Arm {
-        private DcMotorEx arm;
+        private DcMotorEx shoulder;
+        private DcMotorEx elbow;
+        Servo clawClose;
+        Servo clawSpin;
+        Servo clawUp;
         public Arm(HardwareMap hardwareMap){
-            arm = hardwareMap.get(DcMotorEx.class, "arm");
-            arm.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
-            arm.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
-            arm.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-            arm.setDirection(DcMotorSimple.Direction.REVERSE);
+            shoulder = hardwareMap.get(DcMotorEx.class, "shoulder");
+            //shoulder.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+            shoulder.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+            shoulder.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+            shoulder.setDirection(DcMotorSimple.Direction.FORWARD);
+
+            elbow = hardwareMap.get(DcMotorEx.class, "elbow");
+            //elbow.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+            elbow.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+            elbow.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+            elbow.setDirection(DcMotorSimple.Direction.FORWARD);
+
+            clawClose = hardwareMap.get(Servo.class, "clawClose");
+            clawSpin = hardwareMap.get(Servo.class, "clawSpin");
+            clawUp = hardwareMap.get(Servo.class, "clawUp");
         }
-        private boolean moveArmToPoss(double targetPos, double currentPos){
-            double stopErr = 100;
-            if (currentPos < targetPos-stopErr) {
-                arm.setPower(1);
-                return true;
-            } else if (currentPos > targetPos+stopErr) {
-                arm.setPower(-1);
-                return true;
+        double integralSumS = 0;
+        double integralSumE = 0;
+        double lastErrorS = 0;
+        double lastErrorE = 0;
+        ElapsedTime timerE = new ElapsedTime();
+        ElapsedTime timerS = new ElapsedTime();
+        double encoderPosition;
+        double error;
+        double derivative;
+        double out;
+        public double KpS = .01;
+        public double KiS = .000001;
+        public double KdS = 0.0001;
+        public double maxPowUpS = .7;
+        public double KpE = .01;
+        public double KiE = .000001;
+        public double KdE = 0.0001;
+        public double maxPowUpE = .7;
+        public boolean shoulderTarget(double reference, double maxPowDownS) {
+            // obtain the encoder position
+            encoderPosition = -shoulder.getCurrentPosition();
+            telemetry.addData("shoulder pos: ", encoderPosition);
+            // calculate the error
+            error = reference - encoderPosition;
+
+            // rate of change of the error
+            derivative = (error - lastErrorS) / timerS.seconds();
+
+            // sum of all error over time
+            integralSumS = integralSumS + (error * timerS.seconds());
+
+            out = (KpS * error) + (KiS * integralSumS) + (KdS * derivative);
+            if (out > maxPowUpS){
+                out = maxPowUpS;
+            } else if (out < - maxPowDownS){
+                out = -maxPowDownS;
+            }
+
+            shoulder.setPower(out);
+
+            lastErrorS = error;
+
+            // reset the timer for next time
+            timerS.reset();
+
+
+            if (Math.abs(error) < 20) {
+                shoulder.setPower(0);
+                return false;
             } else {
-                arm.setPower(0);
+                return true;
+            }
+        }
+        public boolean elbowTarget( double reference, double maxPowDownE) {
+            // obtain the encoder position
+            encoderPosition = -elbow.getCurrentPosition();
+            telemetry.addData("elbow pos: ", encoderPosition);
+            // calculate the error
+            error = reference - encoderPosition;
+
+            // rate of change of the error
+            derivative = (error - lastErrorE) / timerE.seconds();
+
+            // sum of all error over time
+            integralSumE = integralSumE + (error * timerE.seconds());
+
+            out = (KpE * error) + (KiE * integralSumE) + (KdE * derivative);
+            if (out > maxPowUpE){
+                out = maxPowUpE;
+            } else if (out < - maxPowDownE){
+                out = -maxPowDownE;
+            }
+
+            elbow.setPower(out);
+
+            lastErrorE = error;
+
+            // reset the timer for next time
+            timerE.reset();
+
+            if (Math.abs(error) < 20) {
+                shoulder.setPower(0);
                 return false;
+            } else {
+                return true;
             }
         }
-        public class MoveToBasket implements Action {
-            private double basketPos = 4525;
-
-
+        public class ShoulderMoveToHookReady implements Action {
             @Override
             public boolean run(@NonNull TelemetryPacket packet) {
-                double pos = arm.getCurrentPosition();
-                packet.put("liftPos", pos);
-                return moveArmToPoss(basketPos, pos);
+                return shoulderTarget(760, .2);
             }
         }
-        public Action MoveToBasket() {
-            return new MoveToBasket();
+        public Action ShoulderMoveToHookReady() {
+            return new ShoulderMoveToHookReady();
         }
-        public class MoveToPickup implements Action {
-            private double pickupPos = 12100;
-
-
+        public class ShoulderMoveToHook implements Action {
             @Override
             public boolean run(@NonNull TelemetryPacket packet) {
-                double pos = arm.getCurrentPosition();
-                packet.put("liftPos", pos);
-                return moveArmToPoss(pickupPos, pos);
+                return shoulderTarget(430, .4);
             }
         }
-        public Action MoveToPickup() {
-            return new MoveToPickup();
+        public Action ShoulderMoveToHook() {
+            return new ShoulderMoveToHook();
         }
-        public class MoveToReady implements Action {
-            private double readyPos = 11800;
 
-
+        public class ElbowMoveToHookReady implements Action {
             @Override
             public boolean run(@NonNull TelemetryPacket packet) {
-                double pos = arm.getCurrentPosition();
-                packet.put("liftPos", pos);
-                return moveArmToPoss(readyPos, pos);
+                return elbowTarget(-781, .7);
             }
         }
-        public Action MoveToReady() {
-            return new MoveToReady();
+        public Action ElbowMoveToHookReady() {
+            return new ElbowMoveToHookReady();
         }
-        public class MoveToHook implements Action {
-            private double hookPos = 4188;
 
 
-            @Override
-            public boolean run(@NonNull TelemetryPacket packet) {
-                double pos = arm.getCurrentPosition();
-                packet.put("liftPos", pos);
-                return moveArmToPoss(hookPos, pos);
-            }
-        }
-        public Action MoveToHook() {
-            return new MoveToHook();
-        }
-    }
-
-
-    public class Intake {
-        private DcMotor claw;
         double startTime = 0;
-        Servo hook;
-        ColorSensor color;
-        public Intake(HardwareMap hardwareMap){
-            claw = hardwareMap.get(DcMotor.class, "claw");
-            claw.setDirection(DcMotorSimple.Direction.REVERSE);
-
-            hook = hardwareMap.get(Servo.class, "hook");
-
-            color = hardwareMap.get(ColorSensor.class, "color");
-
-        }
-        public class spitBlockOut implements Action {
+        public class closeClaw implements Action{
             @Override
             public boolean run(@NonNull TelemetryPacket packet) {
-                hook.setPosition(0);
+                clawClose.setPosition(.45);
+                clawSpin.setPosition(.42);
+                clawUp.setPosition(0);
                 if (startTime == 0){
                     startTime = getRuntime();
-                    claw.setPower(-1);
                     return true;
-                } else if (getRuntime() > startTime + 1) {
-                    claw.setPower(0);
+                } else if (getRuntime() > startTime + .5) {
                     startTime = 0;
                     return false;
                 } else return true;
             }
         }
-        public Action spitBlockOut() {
-            return new spitBlockOut();
+        public Action CloseClaw() {
+            return new closeClaw();
         }
-        public class pickUpBlock implements Action {
+        public class openClaw implements Action{
             @Override
             public boolean run(@NonNull TelemetryPacket packet) {
-                hook.setPosition(0);
+                clawClose.setPosition(.2);
+                clawSpin.setPosition(0.365);
+                clawUp.setPosition(0);
                 if (startTime == 0){
                     startTime = getRuntime();
-                    claw.setPower(.8);
                     return true;
-                } else if (getRuntime() > startTime + 10 || color.red() > 200) {
-                    claw.setPower(0);
+                } else if (getRuntime() > startTime + .5) {
                     startTime = 0;
-                    hook.setPosition(.1);
                     return false;
                 } else return true;
             }
         }
-        public Action pickUpBlock() {
-            return new pickUpBlock();
-        }
-        public class hookBlock implements Action {
-            @Override
-            public boolean run(@NonNull TelemetryPacket packet) {
-                hook.setPosition(.1);
-                return false;
-            }
-        }
-        public Action hookBlock() {
-            return new hookBlock();
-        }
-
-        public class moveBlockToReadyPos implements Action {
-            @Override
-            public boolean run(@NonNull TelemetryPacket packet) {
-                hook.setPosition(.08);
-                if (startTime == 0){
-                    startTime = getRuntime();
-                    claw.setPower(-.5);
-                    return true;
-                } else if (getRuntime() > startTime + 1.5) {
-                    claw.setPower(0);
-                    startTime = 0;
-                    hook.setPosition(.1);
-                    return false;
-                } else return true;
-            }
-        }
-        public Action moveBlockToReadyPos() {
-            return new moveBlockToReadyPos();
+        public Action OpenClaw() {
+            return new openClaw();
         }
     }
+
     @Override
     public void runOpMode() throws InterruptedException {
-        Pose2d initialPose = new Pose2d(6, 64, -Math.PI*.25);
+        Pose2d initialPose = new Pose2d(6, 64, Math.PI*.75);
 
         MecanumDrive drive = new MecanumDrive(hardwareMap, initialPose);
 
         Arm arm = new Arm(hardwareMap);
-        Intake intake = new Intake(hardwareMap);
 
         TrajectoryActionBuilder pathToRungs = drive.actionBuilder(initialPose)
                 .setTangent(-Math.PI*.5)
-                .splineToConstantHeading(new Vector2d(6, 34), -Math.PI*.5)
+                .splineToConstantHeading(new Vector2d(6, 38), -Math.PI*.5)
         ;
-        TrajectoryActionBuilder pathAwayFromRungs = drive.actionBuilder(new Pose2d(6, 34, -Math.PI*.25))
+        TrajectoryActionBuilder pathAwayFromRungs = drive.actionBuilder(new Pose2d(6, 38, -Math.PI*.25))
         //Action secondTrajectoryActionChosen = pathToBuckets.fresh()
                 .setTangent(Math.PI*.5)
 //                .splineTo(new Vector2d(48.5, 48.5), -Math.PI*.5);
@@ -239,27 +257,35 @@ public final class Auto extends LinearOpMode {
 
         Actions.runBlocking(
             new SequentialAction(
-                    intake.hookBlock(),
-                    arm.MoveToBasket(),
+                    arm.CloseClaw(),
+                    arm.ShoulderMoveToHookReady(),
+                    firstTrajectoryActionChosen,
                     new ParallelAction(
-                            firstTrajectoryActionChosen,
-                            intake.moveBlockToReadyPos()
-                    ),
-                    arm.MoveToHook(),
-                    secondTrajectoryActionChosen,
-                    intake.spitBlockOut(),
-                    arm.MoveToReady(),
-                    driveTo1stSpikeMark,
-                    new ParallelAction(
-                        driveToPickUpBlock1,
-                        intake.pickUpBlock(),
-                        arm.MoveToPickup()
-                    ),
-                    new ParallelAction(
-                            driveToBuckets,
-                            arm.MoveToHook()
-                    ),
-                    intake.spitBlockOut()
+                        arm.ShoulderMoveToHookReady(),
+                        arm.ElbowMoveToHookReady()),
+                    arm.ShoulderMoveToHook(),
+                    arm.OpenClaw()
+//                    intake.hookBlock(),
+//                    arm.MoveToBasket(),
+//                    new ParallelAction(
+//                            firstTrajectoryActionChosen,
+//                            intake.moveBlockToReadyPos()
+//                    ),
+//                    arm.MoveToHook(),
+//                    secondTrajectoryActionChosen,
+//                    intake.spitBlockOut(),
+//                    arm.MoveToReady(),
+//                    driveTo1stSpikeMark,
+//                    new ParallelAction(
+//                        driveToPickUpBlock1,
+//                        intake.pickUpBlock(),
+//                        arm.MoveToPickup()
+//                    ),
+//                    new ParallelAction(
+//                            driveToBuckets,
+//                            arm.MoveToHook()
+//                    ),
+//                    intake.spitBlockOut()
 
 //                    new ParallelAction(
 //                            arm.MoveToPickup(),
