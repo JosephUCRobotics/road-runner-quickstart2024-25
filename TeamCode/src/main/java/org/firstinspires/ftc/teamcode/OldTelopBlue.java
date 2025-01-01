@@ -17,9 +17,9 @@ import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
-@TeleOp(name = "TeleOp", group = "C")
+@TeleOp(name = "OldTelOp", group = "B")
 @Config
-public class TelopBlue extends LinearOpMode {
+public class OldTelopBlue extends LinearOpMode {
     MecanumDrive drive;
     boolean moveArmToDropPos = false;
     boolean moveArmToPickupPos = false;
@@ -28,16 +28,13 @@ public class TelopBlue extends LinearOpMode {
     double dropPos = 0;
     double headingReset = 0;
     boolean closeClaw = false;
-    boolean targetHangeClaw = false;
 
 
-    public static double elbowGravityCorection = .1;
-    public static double shoulderGravityCorection = .1;
     public static double KpS = .01;
     public static double KiS = .000001;
     public static double KdS = 0.0001;
-    public static double maxPowUpS = 1;
-    public static double maxPowDownS = 1;
+    public static double maxPowUpS = .7;
+    public static double maxPowDownS = .001;
     public static double KpE = .002;
     public static double KiE = .00002;
     public static double KdE = 0.0003;
@@ -49,43 +46,20 @@ public class TelopBlue extends LinearOpMode {
     boolean clawSpinRight = false;
     boolean shoulderTargetPosSet = false;
     boolean elbowTargetPosSet = false;
+
     boolean hangTimerSet = false;
     ElapsedTime hangTimer = new ElapsedTime();
-    ElapsedTime shoulderTimer = new ElapsedTime();
-    PIDController shoulderController;
-    private DcMotorEx shoulder;
-    private DcMotorEx elbow;
-    boolean posControl = false;
-    boolean manualControl = true;
 
-    public static double KpS2 = 1;
-    public static double KpE2 = 1;
-    public static double KvS = 5;
-    public static double KvE = 5;
-    public static double KgS = .0025;
-    public static double KgE = .0025;
+    boolean shoulderMoveComplet = false;
     @Override
     public void runOpMode() throws InterruptedException {
         telemetry = new MultipleTelemetry(telemetry, FtcDashboard.getInstance().getTelemetry());
 
-        drive = new MecanumDrive(hardwareMap, new Pose2d(0, 0, -Math.PI));
-        //shoulderController = new PIDController(1,0, 0);
+        drive = new MecanumDrive(hardwareMap, new Pose2d(0, 0, -Math.PI*.75));
         double rightFrontStart = drive.rightFront.getCurrentPosition();
         double leftFrontStart = drive.leftFront.getCurrentPosition();
         double rightBackStart = drive.rightBack.getCurrentPosition();
         double leftBackStart = drive.leftBack.getCurrentPosition();
-
-        shoulder = hardwareMap.get(DcMotorEx.class, "shoulder");
-        //shoulder.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
-        shoulder.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-        shoulder.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-        shoulder.setDirection(DcMotorSimple.Direction.FORWARD);
-
-        elbow = hardwareMap.get(DcMotorEx.class, "elbow");
-        //elbow.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
-        elbow.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
-        //elbow.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-        elbow.setDirection(DcMotorSimple.Direction.FORWARD);
 
         double[] robotXYA = {0, 0, 0};
         double targetAngle = drive.pose.heading.toDouble();
@@ -100,13 +74,13 @@ public class TelopBlue extends LinearOpMode {
         boolean lastLeftBumper = false;
         boolean lastGamepad2A = false;
         boolean cutDrivePow = false;
-        boolean lastG2Back = false;
+
+
 
 
         waitForStart();
 
         while (opModeIsActive()) {
-
             if(gamepad2.x){
                 if(!lastRightBumper){
                     if (clawSpinLeft || clawSpinRight){
@@ -119,14 +93,6 @@ public class TelopBlue extends LinearOpMode {
                 lastRightBumper = true;
             } else {
                 lastRightBumper = false;
-            }
-            if(gamepad2.back){
-                if(!lastG2Back){
-                    manualControl = !manualControl;
-                }
-                lastG2Back = true;
-            } else {
-                lastG2Back = false;
             }
 
             if(gamepad2.b){
@@ -169,7 +135,7 @@ public class TelopBlue extends LinearOpMode {
             } else {
                 lastGamepadB = false;
             }
-            
+
             if(gamepad1.x){
                 if(!lastGamepadX){
                     moveArmToReadyPos = !moveArmToReadyPos;
@@ -191,14 +157,8 @@ public class TelopBlue extends LinearOpMode {
                 lastGamepadY = false;
             }
 
-
-            if(targetHangeClaw){
-                arm.targetHangPos();
-                closeClaw = false;
-            } else {
-                arm.levelClaw(clawTargetUp);
-            }
             arm.closeClaw(closeClaw);
+            arm.levelClaw(clawTargetUp);
             arm.spinClaw();
 
             if (gamepad1.start){
@@ -207,11 +167,11 @@ public class TelopBlue extends LinearOpMode {
             }
 
             if (gamepad2.a || gamepad1.x) {
-                arm.shoulderTarget2(1340);
+                arm.shoulderTarget(1261, .7);
 //                if (gamepad2.right_bumper || gamepad1.a) {
 //                    arm.elbowTarget(-5925, .7);
 //                } else {
-                    arm.elbowTarget2(-5695);
+                arm.elbowTarget(-6100, .7);
 //                }
                 elbowTargetPosSet = false;
                 shoulderTargetPosSet = false;
@@ -224,85 +184,142 @@ public class TelopBlue extends LinearOpMode {
 //            } else if (moveArmToDropPos) {
 //                arm.moveArmToPoss(4525);
             } else if (gamepad2.y || gamepad1.y) {
-                arm.shoulderTarget2(2700);
-                arm.elbowTarget2(-5430);
+                arm.shoulderTarget(2886, .1);
+                arm.elbowTarget(-5430, .7);
                 elbowTargetPosSet = false;
                 shoulderTargetPosSet = false;
                 clawTargetUp = true;
             } else if (gamepad2.dpad_up) {
-                arm.shoulderTarget(2500);
+//                arm.shoulderTarget(2751, .1);
+//                arm.elbowTarget(-2587, 1);
+                arm.shoulderTarget(2500, 1);
                 arm.elbowTarget(-4650, 1);
-                targetHangeClaw = true;
-
                 elbowTargetPosSet = false;
                 shoulderTargetPosSet = false;
+
                 hangTimerSet = false;
             } else if (gamepad2.dpad_left) {
+//                arm.shoulderTarget(2751, 1);
+//                arm.elbowTarget(-6750, 1);
                 if (!hangTimerSet){
                     hangTimer.reset();
                 }
                 hangTimerSet = true;
+//                if (hangTimer.seconds() < 3){
+//                    arm.shoulderTarget(50, 1);
+//                    arm.elbowTarget(-4650, 1);
+//                } else if (hangTimer.seconds() < 10) {
+//                    cutDrivePow = true;
+//                    arm.shoulderTarget(325, 1);
+//                    arm.elbowTarget(-200, 1);
+//                } else if (hangTimer.seconds() < 20) {
+//                    arm.shoulderTarget(1300, 1);
+//                    arm.elbowTarget(-200, 1);
+//                } else if (hangTimer.seconds() < 30) {
+//                    arm.shoulderTarget(1840, 1);
+//                    arm.elbowTarget(-4825, 1);
+//                } else if (hangTimer.seconds() < 40) {
+//                    arm.shoulderTarget(1650, 1);
+//                    arm.elbowTarget(-5200, 1);
+//                } else if (hangTimer.seconds() < 50) {
+//                    arm.shoulderTarget(2000, 1);
+//                    arm.elbowTarget(-5200, 1);
+//                } else if (hangTimer.seconds() < 60) {
+//                    arm.shoulderTarget(2085, 1);
+//                    arm.elbowTarget(-5010, 1);
+//                } else if (hangTimer.seconds() < 70) {
+//                    arm.shoulderTarget(2085, 1);
+//                    arm.elbowTarget(-6627, 1);
+//                } else if (hangTimer.seconds() < 80) {
+//                    arm.shoulderTarget(687, 1);
+//                    arm.elbowTarget(-5804, 1);
+//                }
                 if (hangTimer.seconds() < 3){
-                    arm.shoulderTarget(50);
+                    arm.shoulderTarget(50,1);
                     arm.elbowTarget(-4650, 1);
-                } else if (hangTimer.seconds() < 7) {
+                } else if (hangTimer.seconds() < 7.5) {
                     cutDrivePow = true;
-                    arm.shoulderTarget(325);
+                    arm.shoulderTarget(325,1);
                     arm.elbowTarget(-200, 1);
                 } else if (hangTimer.seconds() < 9) {
-                    arm.shoulderTarget(1300);
+                    arm.shoulderTarget(1300,1);
                     arm.elbowTarget(-200, 1);
+//                } else if (hangTimer.seconds() < 13) {
+//                    arm.shoulderTarget(2150,1);
+//                    arm.elbowTarget(-5200, 1);
                 } else if (hangTimer.seconds() < 13) {
-                    arm.shoulderTarget(2150);
-                    arm.elbowTarget(-5200, 1);
-                } else if (hangTimer.seconds() < 15) {
-                    arm.shoulderTarget(1650);
-                    arm.elbowTarget(-5200, 1);
-                } else if (hangTimer.seconds() < 16) {
-                    arm.shoulderTarget(2000);
-                    arm.elbowTarget(-5200, 1);
-                } else if (hangTimer.seconds() < 18) {
-                    arm.shoulderTarget(2085);
-                    arm.elbowTarget(-5010, 1);
-                } else if (hangTimer.seconds() < 21) {
-                    arm.shoulderTarget(2085);
-                    arm.elbowTarget(-6627, 1);
-                } else if (hangTimer.seconds() < 123) {
-                    arm.shoulderTarget(687);
-                    arm.elbowTarget(-5804, 1);
-                }
-
+                    arm.shoulderTarget(2865,1);
+                    arm.elbowTarget(-4725, 1);
+                } else if (hangTimer.seconds() < 14) {
+                    arm.shoulderTarget(1800,1);
+                    arm.elbowTarget(-4725, 1);
+                }else if (hangTimer.seconds() < 17) {
+                    arm.shoulderTarget(3000,1);
+                    arm.elbowTarget(-6500, 1);
+                }else if (hangTimer.seconds() < 20) {
+                    arm.shoulderTarget(1628,1);
+                    arm.elbowTarget(-6500, 1);}
+//                if (hangTimer.seconds() < 3){
+//                    arm.shoulderTarget(50, 1);
+//                    arm.elbowTarget(-4650, 1);
+//                } else if (hangTimer.seconds() < 7) {
+//                    cutDrivePow = true;
+//                    arm.shoulderTarget(325, 1);
+//                    arm.elbowTarget(-200, 1);
+//                } else if (hangTimer.seconds() < 9.5) {
+//                    arm.shoulderTarget(1300, 1);
+//                    arm.elbowTarget(-200, 1);
+//                } else if (hangTimer.seconds() < 13) {
+//                    arm.shoulderTarget(2000, 1);
+//                    arm.elbowTarget(-5250, 1);
+//                } else if (hangTimer.seconds() < 13.3) {
+//                    arm.shoulderTarget(2000, 1);
+//                    arm.elbowTarget(-5050, 1);}
+//                } else if (hangTimer.seconds() < 15) {
+//                    arm.shoulderTarget(1650, 1);
+//                    arm.elbowTarget(-5200, 1);
+//                } else if (hangTimer.seconds() < 16) {
+//                    arm.shoulderTarget(2000, 1);
+//                    arm.elbowTarget(-5200, 1);
+//                } else if (hangTimer.seconds() < 18) {
+//                    arm.shoulderTarget(2085, 1);
+//                    arm.elbowTarget(-5010, 1);
+//                } else if (hangTimer.seconds() < 19) {
+//                    arm.shoulderTarget(2085, 1);
+//                    arm.elbowTarget(-6627, 1);
+//                } else if (hangTimer.seconds() < 123) {
+//                    arm.shoulderTarget(687, 1);
+//                    arm.elbowTarget(-5804, 1);
+//                }
                 elbowTargetPosSet = false;
                 shoulderTargetPosSet = false;
-                targetHangeClaw = true;
             } else if (gamepad2.dpad_down) {
-                arm.shoulderTarget(325);
-                arm.elbowTarget(-200, 1);
+                cutDrivePow = true;
+                arm.shoulderTarget(1527, 1);
+                arm.elbowTarget(-6750, 1);
                 elbowTargetPosSet = false;
                 shoulderTargetPosSet = false;
-                targetHangeClaw = true;
-
             } else if (gamepad2.dpad_right) {
-                arm.shoulderTarget(1300);
-                arm.elbowTarget(-200, 1);
+                arm.shoulderTarget(1527, 1);
+                arm.elbowTarget(-5473, 1);
                 elbowTargetPosSet = false;
                 shoulderTargetPosSet = false;
-                targetHangeClaw = true;
+            } else if (gamepad2.back) {
+                arm.shoulderTarget(300, 1);
+                arm.elbowTarget(-5473, 1);
+                elbowTargetPosSet = false;
+                shoulderTargetPosSet = false;
             } else if (gamepad2.start) {
-                arm.shoulderTarget(1650);
-                arm.elbowTarget(-5200, 1);
+                arm.shoulderTarget(386, 1);
+                arm.elbowTarget(-5750, 1);
                 elbowTargetPosSet = false;
                 shoulderTargetPosSet = false;
 //            } else if (gamepad2.y) {
 //                arm.moveWithStick(-gamepad2.left_stick_y, -gamepad2.right_stick_y);
             } else {
                 lastWasJoystick = true;
-                if (manualControl){
-                    arm.moveShoulderManually(-gamepad2.right_stick_y);
-                    arm.moveElbowManually(-gamepad2.left_stick_y);
-                } else {
-                    arm.calcArmPowersWithStick();
-                }
+                arm.moveShoulderManually(-gamepad2.right_stick_y);
+                arm.moveElbowManually(-gamepad2.left_stick_y);
             }
 
             if (!cutDrivePow){
@@ -342,10 +359,23 @@ public class TelopBlue extends LinearOpMode {
     }
 
     public class Arm {
+        private DcMotorEx shoulder;
+        private DcMotorEx elbow;
         Servo clawClose;
         Servo clawSpin;
         Servo clawUp;
         public Arm(HardwareMap hardwareMap){
+            shoulder = hardwareMap.get(DcMotorEx.class, "shoulder");
+            //shoulder.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+            shoulder.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+            shoulder.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+            shoulder.setDirection(DcMotorSimple.Direction.FORWARD);
+
+            elbow = hardwareMap.get(DcMotorEx.class, "elbow");
+            //elbow.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+            elbow.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+            elbow.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+            elbow.setDirection(DcMotorSimple.Direction.FORWARD);
 
             clawClose = hardwareMap.get(Servo.class, "clawClose");
             clawSpin = hardwareMap.get(Servo.class, "clawSpin");
@@ -354,15 +384,11 @@ public class TelopBlue extends LinearOpMode {
 
         public void closeClaw(boolean close){
             if (close){
-                clawClose.setPosition(.48);
+                clawClose.setPosition(.45);
             } else {
                 clawClose.setPosition(.2);
 
             }
-        }
-        public void targetHangPos(){
-                clawUp.setPosition(.5);
-
         }
         public void spinClaw(){
             if (clawSpinLeft) {
@@ -377,18 +403,18 @@ public class TelopBlue extends LinearOpMode {
         double servoTarget;
         public void levelClaw(boolean flat){
             endArmAngle = ((-shoulder.getCurrentPosition() - 1457)/8192.0 * 2*Math.PI)+ ((-elbow.getCurrentPosition() + 3344)/8192.0 * 2*Math.PI);
-            servoTarget = -endArmAngle/Math.PI*.75+.11;
+            servoTarget = endArmAngle/Math.PI *-.75 + .03;
             if (-elbow.getCurrentPosition() > -4144 && -elbow.getCurrentPosition() < -2619) {
                 flat = false;
             }
             if (!flat){
                 servoTarget+=.4;
             }
-            if (servoTarget < .11){
-                servoTarget = .11;
+            if (servoTarget < 0){
+                servoTarget = 0;
             }
-            if (servoTarget > .69){
-                servoTarget = .69;
+            if (servoTarget > .55){
+                servoTarget = .55;
             }
             telemetry.addData("servo target: ", servoTarget);
             telemetry.addData("servo current: ", clawUp.getPosition());
@@ -403,140 +429,48 @@ public class TelopBlue extends LinearOpMode {
         double lastErrorE = 0;
         ElapsedTime timerE = new ElapsedTime();
         ElapsedTime timerS = new ElapsedTime();
+        double encoderPosition;
         double error;
         double derivative;
         double out;
-        double shoulderPos = 0;
-//        public void shoulderTarget(double targetVel) {
-//            // obtain the encoder position
-//            double currentVel = shoulder.getVelocity();
-//            telemetry.addData("shoulder vel: ", shoulder.getVelocity());
-//            // calculate the error
-//            error = targetVel - currentVel;
-//
-//            // rate of change of the error
-//            derivative = (error - lastErrorS) / timerS.seconds();
-//
-//            // sum of all error over time
-//            integralSumS = integralSumS + (error * timerS.seconds());
-//
-//            out = (KpS * error) + (KiS * integralSumS) + (KdS * derivative);
-//
-//            //shoulderPos = (encoderPosition-1465)/8192 *2*Math.PI;
-//
-//            out += Math.cos(shoulderPos) * shoulderGravityCorection;
-//            if (out > maxPowUpS){
-//                out = maxPowUpS;
-//            } else if (out < - maxPowDownS){
-//                out = -maxPowDownS;
-//            }
-//
-//            shoulder.setVelocity(targetVel*10);
-//
-//            lastErrorS = error;
-//
-//            // reset the timer for next time
-//            timerS.reset();
-//
-////            if (Math.abs(error) < 20) {
-////                moveArmToDropPos = false;
-////                moveArmToHookPoss = false;
-////                moveArmToPickupPos = false;
-////                moveArmToReadyPos = false;
-////            }
-//        }
-            public void shoulderTarget(double reference) {
-                double maxPowDownS = .7;
-                // obtain the encoder position
-                double encoderPosition = -shoulder.getCurrentPosition();
-                telemetry.addData("shoulder pos: ", encoderPosition);
-                // calculate the error
-                error = reference - encoderPosition;
-
-                // rate of change of the error
-                derivative = (error - lastErrorS) / timerS.seconds();
-
-                // sum of all error over time
-                integralSumS = integralSumS + (error * timerS.seconds());
-
-                out = (KpS * error) + (KiS * integralSumS) + (KdS * derivative);
-                if (out > maxPowUpS){
-                    out = maxPowUpS;
-                } else if (out < - maxPowDownS){
-                    out = -maxPowDownS;
-                }
-
-                shoulder.setPower(out);
-
-                lastErrorS = error;
-
-                // reset the timer for next time
-                timerS.reset();
-
-            //            if (Math.abs(error) < 20) {
-            //                moveArmToDropPos = false;
-            //                moveArmToHookPoss = false;
-            //                moveArmToPickupPos = false;
-            //                moveArmToReadyPos = false;
-            //            }
+        double oldShoulderTarget = 0;
+        public void shoulderTarget(double reference, double maxPowDownS) {
+            // obtain the encoder position
+            encoderPosition = -shoulder.getCurrentPosition();
+            telemetry.addData("shoulder pos: ", encoderPosition);
+            // calculate the error
+            if (reference != oldShoulderTarget){
+                shoulderMoveComplet = false;
             }
-        public void shoulderTarget2(double target){
-            double err = target - shoulder.getCurrentPosition();
-            err *= .005;
-            if (err > .5) {
-                err = .5;
-            }else if (err < -.5){
-                err = -.5;
+            oldShoulderTarget = reference;
+            error = reference - encoderPosition;
+            if (Math.abs(error) < 25){
+                shoulderMoveComplet = true;
             }
-            moveShoulder(err);
-        }
-        public void elbowTarget2(double target){
-            double err = target - elbow.getCurrentPosition();
-            err *= .005;
-            if (err > .5) {
-                err = .5;
-            }else if (err < -.5){
-                err = -.5;
-            }
-            moveElbow(err);
-        }
-        public void elbowTarget( double reference, double maxPowDownE) {
-//            // obtain the encoder position
-//            encoderPosition = -elbow.getCurrentPosition();
-//            telemetry.addData("elbow pos: ", encoderPosition);
-//            // calculate the error
-//            error = reference - encoderPosition;
-//
-//            // rate of change of the error
-//            derivative = (error - lastErrorE) / timerE.seconds();
-//
-//            // sum of all error over time
-//            integralSumE = integralSumE + (error * timerE.seconds());
-//
-//            out = (KpE * error) + (KiE * integralSumE) + (KdE * derivative);
-//
-//            double elbowPos = (encoderPosition+3381)/8192 *2*Math.PI;
-//            telemetry.addData("elbow Pos", elbowPos);
-//
-//            out += Math.cos(elbowPos+shoulderPos) * elbowGravityCorection;
-//            telemetry.addData("gpow", Math.cos(elbowPos) * elbowGravityCorection);
-//
-//
-//
-//            if (out > maxPowUpE){
-//                out = maxPowUpE;
-//            } else if (out < - maxPowDownE){
-//                out = -maxPowDownE;
+//            if (shoulderMoveComplet){
+//                error = 0;
 //            }
 
-            //elbow.setPower(out);
-            elbow.setPower(0);
 
-            lastErrorE = error;
+            // rate of change of the error
+            derivative = (error - lastErrorS) / timerS.seconds();
+
+            // sum of all error over time
+            integralSumS = integralSumS + (error * timerS.seconds());
+
+            out = (KpS * error) + (KiS * integralSumS) + (KdS * derivative);
+            if (out > maxPowUpS){
+                out = maxPowUpS;
+            } else if (out < - maxPowDownS){
+                out = -maxPowDownS;
+            }
+
+            shoulder.setPower(out);
+
+            lastErrorS = error;
 
             // reset the timer for next time
-            timerE.reset();
-
+            timerS.reset();
 
 //            if (Math.abs(error) < 20) {
 //                moveArmToDropPos = false;
@@ -545,166 +479,146 @@ public class TelopBlue extends LinearOpMode {
 //                moveArmToReadyPos = false;
 //            }
         }
+        public void elbowTarget( double reference, double maxPowDownE) {
+            // obtain the encoder position
+            encoderPosition = -elbow.getCurrentPosition();
+            telemetry.addData("elbow pos: ", encoderPosition);
+            // calculate the error
+            error = reference - encoderPosition;
 
-        double shoulderTargetPos = 0;
+            // rate of change of the error
+            derivative = (error - lastErrorE) / timerE.seconds();
 
-        double lastPos = 0;
-        double lastTime = 0;
-        public void moveShoulderManually(double pow){
-            if (!shoulderTargetPosSet){
-                shoulderTargetPos = -shoulder.getCurrentPosition();
-                shoulderTargetPosSet = true;
+            // sum of all error over time
+            integralSumE = integralSumE + (error * timerE.seconds());
+
+            out = (KpE * error) + (KiE * integralSumE) + (KdE * derivative);
+            if (out > maxPowUpE){
+                out = maxPowUpE;
+            } else if (out < - maxPowDownE){
+                out = -maxPowDownE;
             }
 
-            if (pow!=0){
-                shoulder.setPower(pow*.6);
-                shoulderTargetPosSet = false;
-            } else {
-                shoulderTarget(shoulderTargetPos/*elbowTargetPos*/);
-            }
+            elbow.setPower(out);
 
-            telemetry.addData("shoulder pos", -shoulder.getCurrentPosition());
-            telemetry.addData("shoulder target pos", shoulderTargetPos);
+            lastErrorE = error;
 
+            // reset the timer for next time
+            timerE.reset();
 
-
+//            if (Math.abs(error) < 20) {
+//                moveArmToDropPos = false;
+//                moveArmToHookPoss = false;
+//                moveArmToPickupPos = false;
+//                moveArmToReadyPos = false;
+//            }
         }
-        double elbowTargetPos = 0;
-
-        public void moveElbowManually(double pow){
-            if (!elbowTargetPosSet){
-                elbowTargetPos = -elbow.getCurrentPosition();
-                elbowTargetPosSet = true;
-            }
-
-            if (pow!=0){
-                elbow.setPower(pow*.6);
-                elbowTargetPosSet = false;
-            } else {
-                elbowTarget(-elbow.getCurrentPosition()/*elbowTargetPos*/, .7);
-            }
-
-            telemetry.addData("elbow pos", -elbow.getCurrentPosition());
-        }
-
-        int ticksPerMotorRev = 28;
-        double gearRatio = 125 * (50/14);
-        double ticksPerRev = ticksPerMotorRev * gearRatio;
-        double maxVelocity = 0.125;
-        double shoulderAngle = 0;
-
-        public void moveShoulder(double powIn){
-            double vel = shoulder.getVelocity() / ticksPerRev;
-
-            double pos = -shoulder.getCurrentPosition() + ticksPerRev;
-
-            shoulderAngle = (pos/ticksPerRev)*(2*Math.PI);
-
-            double shoulderCosAngle = Math.cos(shoulderAngle);
-
-            double desiredVelocity = powIn*maxVelocity;
-
-            //double pow = cosAngle * (KvS*desiredVelocity + KgS) + Kv2S*desiredVelocity;
-        /*if (pow == 0){
-            pow = .00001;
-        }*/
-            double pow = KgS * shoulderCosAngle + KvS * desiredVelocity + KpS2 * (desiredVelocity - vel);
-
-            //double pow = shoulderController.output(-gamepad1.left_stick_y*maxVelocity, vel,-gamepad1.left_stick_y*maxVelocity);
-
-
-            //lastPos = pos;
-            //lastTime = time;
-            //lastPow = pow;
-
-
-
-            //pow += angleMultiplyer;
-            //pow += shoulderGravityCorection * angleMultiplyer;
-
-            shoulder.setPower(pow);
-            telemetry.addData("raw vel", shoulder.getVelocity());
-            telemetry.addData("rev/sec vel", vel);
-            telemetry.addData("pow", pow);
-            telemetry.addData("pos", pos);
-            telemetry.addData("angle(RAD)", (pos/ticksPerRev)*(2*Math.PI));
-            telemetry.addData("Cos(angle)", shoulderCosAngle);
-            telemetry.addData("desiredVelocity", desiredVelocity);
-            telemetry.addData("","");
-
-
-
-        }
-
-        public void moveElbow(double powIn){
-            double vel = elbow.getVelocity() / ticksPerRev;
-
-            double pos = -elbow.getCurrentPosition() + ticksPerRev;
-
-            double cosAngle = Math.cos((pos/ticksPerRev)*(2*Math.PI)+shoulderAngle);
-
-            double desiredVelocity = powIn*maxVelocity;
-
-            //double pow = cosAngle * (KvS*desiredVelocity + KgS) + Kv2S*desiredVelocity;
-        /*if (pow == 0){
-            pow = .00001;
-        }*/
-            double pow = KgE * cosAngle + KvE * desiredVelocity + KpE2 * (desiredVelocity - vel);
-
-            //double pow = shoulderController.output(-gamepad1.left_stick_y*maxVelocity, vel,-gamepad1.left_stick_y*maxVelocity);
-
-
-            //lastPos = pos;
-            //lastTime = time;
-            //lastPow = pow;
-
-
-
-            //pow += angleMultiplyer;
-            //pow += shoulderGravityCorection * angleMultiplyer;
-
-            elbow.setPower(pow);
-            telemetry.addData("raw vel", elbow.getVelocity());
-            telemetry.addData("rev/sec vel", vel);
-            telemetry.addData("pow", pow);
-            telemetry.addData("pos", pos);
-            telemetry.addData("angle(RAD)", (pos/ticksPerRev)*(2*Math.PI));
-            telemetry.addData("Cos(angle)", cosAngle);
-            telemetry.addData("desiredVelocity", desiredVelocity);
-
-            telemetry.update();
-
-        }
-
-        double arm1Length= 15 + 3/16;
-        double arm2Length = 13.75;
-        double[] angle = new double[2];
-        double[] startPos = {255, 255};
         double[] v = new double[2];
+        boolean inUpperHalf = true;
         boolean bendUp = false;
+        boolean aDown2 = false;
+        boolean armIsAtMin = false;
+        double[] angle = new double[2];
+        double[] checkAngle = new double[2];
         double minBend = .3;
         double maxBend = 2.5;
-        boolean armIsAtMin = false;
         double joint1MaxUp = 1.7;
         double joint1MaxDown = -1;
+        double j00 = 0;
+        double j01 = 0;
+        double j10 = 0;
+        double j11 = 0;
+        double[][] j = new double[2][2];
+        double arm1Length= 15 + 3/16;
+        double arm2Length = 13.75;
         double[][] inverseJ = new double[2][1];
         double[] changeInA = new double[2];
-        boolean inUpperHalf;
-        boolean aDown2 = false;
-
-        void calcArmPowersWithStick(){
-            angle[0] = (-shoulder.getCurrentPosition() - 1457)/8192.0 * 2*Math.PI;
-            angle[1] = (-elbow.getCurrentPosition() + 3344)/8192.0 * 2*Math.PI;
-            telemetry.addData("angle0", angle[0]);
-            telemetry.addData("angle1", angle[1]);
-
-            if (angle[1]-angle[0]>0){
-                bendUp = false;
+        double oldPosS = 0;
+        double oldPosE = 0;
+        public void moveWithStick(double Vx, double Vy){
+            // Set the current angle vector
+            if(Vx == 0 && Vy == 0){
+                if (lastWasJoystick){
+                    angle[0] = (-shoulder.getCurrentPosition() - 1457)/8192.0 * 2*Math.PI;
+                    angle[1] = (-elbow.getCurrentPosition() + 3344)/8192.0 * 2*Math.PI;
+                }
+                lastWasJoystick = false;
             } else {
-                bendUp = true;
+                lastWasJoystick = true;
             }
+            telemetry.addData("angle: ", angle[0] + ", " + angle[1]);
+
+            // Set the input vector
+            v[0] = Vx;
+            v[1] = Vy;
+            telemetry.addData("v: ", v[0] + ", " + v[1]);
+
+            // check to see if the arm is in the upper half or the lower half
+            if (angle[0] >= 0) {
+                inUpperHalf = true;
+            } else {
+                inUpperHalf = false;
+            }
+
+            // Set if the arm should bend up or down
+            if (gamepad2.a){
+                if (!aDown2){
+                    bendUp = !bendUp;
+                    aDown2 = true;
+                }
+            } else {
+                aDown2 = false;
+            }
+            telemetry.addData("bendUp: ", bendUp);
+
+            // Limit the elbow joint
+            armIsAtMin = false;
+            if (bendUp){
+                if (angle[1] >= -minBend) {
+                    if (angle[1] >= -minBend + .02) {
+                        angle[1] -= .02;
+                    } else {
+                        angle[1] = -minBend;
+                    }
+                    armIsAtMin = true;
+                } else if (angle[1] <= -maxBend) {
+                    angle[1] = -maxBend;
+                }
+            } else {
+                if (angle[1] <= minBend) {
+                    if (angle[1] <= minBend - .02) {
+                        angle[1] += .02;
+                    } else {
+                        angle[1] = minBend;
+                    }
+                    armIsAtMin = true;
+                } else if (angle[1] >= maxBend) {
+                    angle[1] = maxBend;
+                }
+            }
+
+            // set limits for the arm
+            if (armIsAtMin) {
+                if (v[0] > 0){
+                    v[0] = 0;
+                }
+                if (inUpperHalf) {
+                    if (v[1] > 0) {
+                        v[1] = 0;
+                    }
+                } else {
+                    if (v[1] < 0) {
+                        v[1] = 0;
+                    }
+                }
+            }
+            if (angle[0] > joint1MaxUp) {
+                angle[0] = joint1MaxUp;
+            } else if (angle[0] < joint1MaxDown) {
+                angle[0] = joint1MaxDown;
+            }
+
             // Calculate matrix J
-            double[][] j = new double[2][2];
             j[0][0] = -arm1Length*Math.sin(angle[0]) -arm2Length*Math.sin(angle[0] + angle[1]);
             j[0][1] = -arm2Length*Math.sin(angle[0] + angle[1]);
             j[1][0] = arm1Length*Math.cos(angle[0]) + arm2Length*Math.cos(angle[0] + angle[1]);
@@ -725,122 +639,122 @@ public class TelopBlue extends LinearOpMode {
             changeInA[0] /= 2;
             changeInA[1] /= 2;
 
-            angle[0] = angle[0] + changeInA[0];
-            angle[1] = angle[1] + changeInA[1];
+            checkAngle[0] = angle[0] + changeInA[0];
+            checkAngle[1] = angle[1] + changeInA[1];
 
             double[] pos1 = new double[2];
-            pos1[0] = Math.cos(angle[0])*arm1Length;
-            pos1[1] = Math.sin(angle[0])*arm1Length;
+            pos1[0] = Math.cos(checkAngle[0])*arm1Length;
+            pos1[1] = Math.sin(checkAngle[0])*arm1Length;
             double[] pos2 = new double[2];
-            pos2[0] = Math.cos(angle[0] + angle[1])*arm2Length;
-            pos2[1] = Math.sin(angle[0] + angle[1])*arm2Length;
+            pos2[0] = Math.cos(checkAngle[0] + checkAngle[1])*arm2Length;
+            pos2[1] = Math.sin(checkAngle[0] + checkAngle[1])*arm2Length;
 
-            v[0] = -gamepad2.left_stick_y;
-            v[1] = -gamepad2.right_stick_y;
+            telemetry.addData("pos1", pos1[0] + " " + pos1[1]);
+            telemetry.addData("pos2", pos2[0] + " " + pos2[1]);
 
-            // check to see if the arm is in the upper half or the lower half
-            if (angle[0] >= 0) {
-                inUpperHalf = true;
-            } else {
-                inUpperHalf = false;
-            }
-
-            telemetry.addData("BendUp ", bendUp);
-
-
-            armIsAtMin = false;
-            if (bendUp){
-                if (angle[1] >= -minBend) {
-                    if (angle[1] >= -minBend + .02) {
-                        angle[1] -= .02;
-                    } else {
-                        angle[1] = -minBend;
-                    }
-                    armIsAtMin = true;
-                } else if (angle[1] <= -maxBend) {
-                    angle[1] = -maxBend;
-                    if (v[0] < 0){
-                        v[0] = 0;
-                    }
-                    if (v[1] > 0){
-                        v[1] = 0;
-                    }
-                }
-            } else {
-                if (angle[1] <= minBend) {
-                    if (angle[1] <= minBend - .02) {
-                        angle[1] += .02;
-                    } else {
-                        angle[1] = minBend;
-                    }
-                    armIsAtMin = true;
-                } else if (angle[1] >= maxBend) {
-                    angle[1] = maxBend;
-                    if (angle[0] >= Math.PI/2) {
-                        if (v[0] > 0) {
-                            v[0] = 0;
-                        }
-                        if (v[1] > 0){
-                            v[1] = 0;
-                        }
-                    }else {
-                        if (v[0]<0) {
-                            v[0] = 0;
-                        }
-                        if (v[1]<0) {
-                            v[1] = 0;
-                        }
-                    }
-                }
-            }
-            if (armIsAtMin) {
-                telemetry.addData("At Min", "True");
-                if (v[0] > 0){
-                    v[0] = 0;
-                }
-                if (inUpperHalf) {
-                    if (v[1] > 0) {
-                        v[1] = 0;
-                    }
-                } else {
-                    if (v[1] < 0) {
-                        v[1] = 0;
-                    }
-                }
-            }
-            if (angle[0] > joint1MaxUp) {
-                angle[0] = joint1MaxUp;
-            } else if (angle[0] < joint1MaxDown) {
-                angle[0] = joint1MaxDown;
-            }
-
+            boolean pastLimit = false;
             if (pos1[0] + pos2[0] > 27) {
-                if (v[0] > 0) {
-                    v[0] = 0;
-                }
+
+                v[0] = -.5;
+                pastLimit = true;
             }
             if (pos1[1] + pos2[1] < -13.75) {
-                if (v[1] < 0) {
-                    v[1] = 0;
-                }
+                v[1] = .5;
+                pastLimit = true;
             }
             if (pos1[1] + pos2[1] < 0 && pos1[0] + pos2[0] < 6){
-                if (v[0] < 1){
-                    v[0] = 0;
-                }
+                v[0] = .5;
+                pastLimit = true;
             }
             if (pos1[1] + pos2[1] > 0 && pos1[0] + pos2[0] < 0){
-                if (v[0] < 0){
-                    v[0] = 0;
+                v[0] *= .5;
+                pastLimit = true;
+            }
+
+            if (pastLimit){
+                if (v[0] !=0 || v[1] != 0){
+                    inverseJ = invert(j);
+                    double[][] newV = new double[2][1];
+                    newV[0][0] = v[0];
+                    newV[1][0] = v[1];
+                    double[][] newChangeInA = multiplyMatrices(inverseJ, newV);
+                    changeInA[0] = newChangeInA[0][0];
+                    changeInA[1] = newChangeInA[1][0];
                 }
             }
-            telemetry.addData("powerS", changeInA[0]*15);
-            telemetry.addData("powerE", changeInA[1]*15);
-            moveShoulder(changeInA[0]*15);
-            moveElbow(changeInA[1]*15);
+            angle[0] += changeInA[0];
+            angle[1] += changeInA[1];
+
+
+            telemetry.addData("angle[0]", angle[0]);
+            telemetry.addData("changeInA", changeInA[0]);
+            telemetry.addData("angle[0]/(2*Math.PI) * 8192.0 + 3344", -shoulder.getCurrentPosition());
+            telemetry.addData("angle[0]/(2*Math.PI) * 8192.0 + 3344", angle[0]/(2*Math.PI) * 8192.0 + 1457);
+
+            telemetry.addData("Sh err: ", -shoulder.getCurrentPosition() - (angle[0]/(2*Math.PI) * 8192.0 + 1457));
+            telemetry.addData("El err: ", -elbow.getCurrentPosition() - (angle[1]/(2*Math.PI) * 8192.0 - 3344));
+
+            shoulderTarget(angle[0]/(2*Math.PI) * 8192.0 + 1457, .1);
+            elbowTarget(angle[1] / (2 * Math.PI) * 8192.0 -  3344, .7);
+
+
+//            if (Math.abs(-shoulder.getCurrentPosition()-oldPosS) == 0){
+//                shoulder.setPower(changeInA[0]*KpS);
+//            } else {
+//                shoulder.setPower(changeInA[0]*KpS/Math.abs(-shoulder.getCurrentPosition()-oldPosS));
+//            }
+//            if (Math.abs(-elbow.getCurrentPosition()-oldPosE) == 0) {
+//                elbow.setPower(changeInA[1]*KpS);
+//            } else {
+//                elbow.setPower(changeInA[1]*KpS/Math.abs(-elbow.getCurrentPosition()-oldPosE));
+//            }
+//            telemetry.addData("sChange ", Math.abs(-shoulder.getCurrentPosition()-oldPosS));
+//            telemetry.addData("eChange ", Math.abs(-elbow.getCurrentPosition()-oldPosE));
+//
+//            oldPosS = -shoulder.getCurrentPosition();
+//            oldPosE = -elbow.getCurrentPosition();
+
+
 
         }
+        double shoulderTargetPos = 0;
 
+        public void moveShoulderManually(double pow){
+            if (!shoulderTargetPosSet){
+                shoulderTargetPos = -shoulder.getCurrentPosition();
+                shoulderTargetPosSet = true;
+            }
+
+            if (pow!=0){
+                shoulder.setPower(pow*.6);
+                shoulderTargetPosSet = false;
+            } else {
+                shoulderTarget(shoulderTargetPos, .7);
+            }
+
+            telemetry.addData("shoulder pos", -shoulder.getCurrentPosition());
+            telemetry.addData("shoulder target pos", shoulderTargetPos);
+
+
+        }
+        double elbowTargetPos = 0;
+
+        public void moveElbowManually(double pow){
+            if (!elbowTargetPosSet){
+                elbowTargetPos = -elbow.getCurrentPosition();
+                elbowTargetPosSet = true;
+            }
+
+            if (pow!=0){
+                elbow.setPower(pow*.6);
+                elbowTargetPosSet = false;
+            } else {
+                elbowTarget(elbowTargetPos, .7);
+            }
+
+            telemetry.addData("elbow pos", -elbow.getCurrentPosition());
+
+        }
 
         public double[][] invert(double a[][])
         {
