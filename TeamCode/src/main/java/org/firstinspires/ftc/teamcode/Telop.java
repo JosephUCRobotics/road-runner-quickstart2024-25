@@ -31,15 +31,16 @@ public class Telop extends LinearOpMode {
 
     public static double elbowGravityCorection = .1;
     public static double shoulderGravityCorection = .1;
-    public static double KpS = 0.0005;
+    public static double KpS = 0.002;
     public static double KiS = 0.000;
-    public static double KdS = 0.000;
-    public static double GravityK = .15;
+    public static double KdS = 0.0001;
+    public static double GravityK = .02;
+    public static double GravityK2 = 0.15;
     public static double maxPowUpS = 1;
     public static double maxPowDownS = 1;
-    public static double KpE = .002;
-    public static double KiE = .00002;
-    public static double KdE = 0.0003;
+    public static double KpE = .003;
+    public static double KiE = .0000;
+    public static double KdE = 0.0001;
     public static double maxPowUpE = .7;
     public static double maxPowDownE = .001;
     boolean lastWasJoystick = false;
@@ -137,7 +138,6 @@ public class Telop extends LinearOpMode {
             }
 
             if(gamepad2.b){
-                arm.setIntegralSumSTo0();
                 if(!lastLeftBumper){
                     if (clawSpinLeft || clawSpinRight){
                         clawSpinLeft = false;
@@ -205,7 +205,7 @@ public class Telop extends LinearOpMode {
                 arm.targetHangPos();
                 closeClaw = false;
             } else {
-                arm.levelClaw(clawTargetUp);
+                arm.levelClaw(clawTargetUp, gamepad2.left_trigger);
             }
             arm.closeClaw(closeClaw);
             arm.spinClaw();
@@ -220,7 +220,7 @@ public class Telop extends LinearOpMode {
 //                if (gamepad2.right_bumper || gamepad1.a) {
 //                    arm.elbowTarget(-5925, .7);
 //                } else {
-                    //arm.elbowTarget(-5695,1);
+                    arm.elbowTarget(-5695,1);
 //                }
                 elbowTargetPosSet = false;
                 shoulderTargetPosSet = false;
@@ -232,15 +232,15 @@ public class Telop extends LinearOpMode {
 //                arm.moveArmToPoss(11609);
 //            } else if (moveArmToDropPos) {
 //                arm.moveArmToPoss(4525);
-            } else if (gamepad2.x) {
-                arm.shoulderTarget(3750);
-                //arm.elbowTarget(-5430,1);
+            } else if (gamepad2.right_trigger > .4) {
+                arm.shoulderTarget(3700);
+                arm.elbowTarget(-4000,1);
                 elbowTargetPosSet = false;
                 shoulderTargetPosSet = false;
                 clawTargetUp = true;
             } else if (gamepad2.y || gamepad1.y) {
                 arm.shoulderTarget(2700);
-                //arm.elbowTarget(-5430,1);
+                arm.elbowTarget(-5430,1);
                 elbowTargetPosSet = false;
                 shoulderTargetPosSet = false;
                 clawTargetUp = true;
@@ -263,18 +263,30 @@ public class Telop extends LinearOpMode {
                 }
                 hangTimerSet = true;
                 if (hangTimer.seconds() < 3){
-                    arm.shoulderTarget(50);
-                    arm.elbowTarget(-4650, 1);
-                } else if (hangTimer.seconds() < 7) {
+                    arm.shoulderTargetForHanging(50);
+                    arm.elbowTargetNoG(-4650, 1);
+                } else if (hangTimer.seconds() < 6.5) {
                     //cutDrivePow = true;
-                    arm.shoulderTarget(325);
-                    arm.elbowTarget(-200, 1);
-                } else if (hangTimer.seconds() < 8.2) {
-                    arm.shoulderTarget(1300);
-                    arm.elbowTarget(-200, 1);
+                    arm.shoulderTargetNoG(325);
+                    arm.elbowTargetNoG(-200, 1);
+                } else if (hangTimer.seconds() < 7.7) {
+                    arm.shoulderTargetNoG(1300);
+                    arm.elbowTargetNoG(-200, 1);
                 } else if (hangTimer.seconds() < 11) {
-                    arm.shoulderTarget(2150);//2150
-                    arm.elbowTarget(-5200, 1);
+                    arm.shoulderTargetNoG(1900);//2150
+                    arm.elbowTargetNoG(-4950, 1);
+                } else if (hangTimer.seconds() < 13) {
+                    arm.shoulderTargetNoG(2350);
+                    arm.elbowTargetNoG(-6450, 1);
+                } else if (hangTimer.seconds() < 14.3) {
+                    arm.shoulderTargetForHanging(1500);
+                    arm.elbowTargetNoG(-6450, 1);
+                } else if (hangTimer.seconds() < 16) {
+                    arm.shoulderTargetForHanging(400);
+                    arm.elbowTargetNoG(-5230, 1);
+                }else if (hangTimer.seconds() < 19) {
+                    arm.shoulderTargetNoG(150);
+                    arm.elbowTargetForHanging(-5700, 1);
                 }
 
                 elbowTargetPosSet = false;
@@ -325,9 +337,13 @@ public class Telop extends LinearOpMode {
 //            } else if (gamepad2.y) {
 //                arm.moveWithStick(-gamepad2.left_stick_y, -gamepad2.right_stick_y);
             } else {
-                shoulder.setPower(0);
-//                lastWasJoystick = true;
-//                if (!hangManualy){
+                lastWasJoystick = true;
+                double shoulderPos = -shoulder.getCurrentPosition();
+
+                if (-gamepad2.right_stick_y >= 0 && shoulderPos > 3700){
+                    arm.shoulderTarget(3700);
+                } else if (!hangManualy){
+                    arm.moveShoulderManually(-gamepad2.right_stick_y);
 //                    if (manualControl){
 //                        arm.moveShoulderManually(-gamepad2.right_stick_y);
 //                        arm.moveElbowManually(-gamepad2.left_stick_y);
@@ -336,7 +352,13 @@ public class Telop extends LinearOpMode {
 //                        arm.moveShoulder(-gamepad2.right_stick_y);
 //                        arm.moveElbow(-gamepad2.left_stick_y);
 //                    }
-//                }
+                }
+                if (-gamepad2.left_stick_y >= 0 && shoulderPos > 2300 && -elbow.getCurrentPosition() > -3700) {
+                    arm.elbowTarget( -3700, 1);
+                } else if (!hangManualy) {
+                    arm.moveElbowManually(-gamepad2.left_stick_y);
+                }
+
             }
 
             if (!cutDrivePow && !hangManualy){
@@ -431,20 +453,24 @@ public class Telop extends LinearOpMode {
         }
         double endArmAngle;
         double servoTarget;
-        public void levelClaw(boolean flat){
-            endArmAngle = ((-shoulder.getCurrentPosition() - 1457)/8192.0 * 2*Math.PI)+ ((-elbow.getCurrentPosition() + 3344)/8192.0 * 2*Math.PI);
-            servoTarget = -endArmAngle/Math.PI*.75+.11;
-            if (-elbow.getCurrentPosition() > -4144 && -elbow.getCurrentPosition() < -2619) {
-                flat = false;
-            }
-            if (!flat){
-                servoTarget+=.4;
-            }
-            if (servoTarget < .11){
-                servoTarget = .11;
-            }
-            if (servoTarget > .69){
-                servoTarget = .69;
+        public void levelClaw(boolean flat, double pos){
+            if (pos ==0 || -elbow.getCurrentPosition() > -4144 && -elbow.getCurrentPosition() < -2619){
+                endArmAngle = ((-shoulder.getCurrentPosition() - 1457)/8192.0 * 2*Math.PI)+ ((-elbow.getCurrentPosition() + 3344)/8192.0 * 2*Math.PI);
+                servoTarget = -endArmAngle/Math.PI*.75+.11;
+                if (-elbow.getCurrentPosition() > -4144 && -elbow.getCurrentPosition() < -2619) {
+                    flat = false;
+                }
+                if (!flat){
+                    servoTarget+=.4;
+                }
+                if (servoTarget < .11){
+                    servoTarget = .11;
+                }
+                if (servoTarget > .69){
+                    servoTarget = .69;
+                }
+            } else {
+                servoTarget = pos * .69;
             }
 //            telemetry.addData("servo target: ", servoTarget);
 //            telemetry.addData("servo current: ", clawUp.getPosition());
@@ -482,9 +508,9 @@ public class Telop extends LinearOpMode {
             // sum of all error over time
             integralSumS = integralSumS + (error * timerS.seconds());
 
-            double shoulderAngle = ((encoderPosition - 1350)/ticksPerRev)*(2*Math.PI);
+            shoulderAngle = ((encoderPosition - 1350)/ticksPerRev)*(2*Math.PI);
 
-            double gravity = Math.cos(shoulderAngle) * GravityK;
+            double gravity = Math.cos(shoulderAngle) * GravityK + elbowGravity;
 
             out = (KpS * error) + (KiS * integralSumS) + (KdS * derivative);
 
@@ -520,6 +546,88 @@ public class Telop extends LinearOpMode {
 //                moveArmToReadyPos = false;
 //            }
         }
+
+        public void shoulderTargetNoG(double reference) {
+            double maxPowDownS = 1;
+            // obtain the encoder position
+            encoderPosition = -shoulder.getCurrentPosition();
+            //telemetry.addData("shoulder pos: ", encoderPosition);
+
+            // calculate the error
+            error = reference - encoderPosition;
+
+            // rate of change of the error
+            derivative = (error - lastErrorS) / timerS.seconds();
+
+            // sum of all error over time
+            integralSumS = integralSumS + (error * timerS.seconds());
+
+            shoulderAngle = ((encoderPosition - 1350)/ticksPerRev)*(2*Math.PI);
+
+            double gravity = Math.cos(shoulderAngle) * GravityK + elbowGravity;
+
+            out = (KpS * error) + (KiS * integralSumS) + (KdS * derivative);
+
+            out = Math.max(Math.min(out, 1), -1);
+
+            //out += gravity;
+
+//            if (out > maxPowUpS){
+//                out = maxPowUpS;
+//            } else if (out < - maxPowDownS){
+//                out = -maxPowDownS;
+//            }
+
+            shoulder.setPower(out);
+
+            lastErrorS = error;
+
+
+
+//            if (Math.abs(error) < 20) {
+//                moveArmToDropPos = false;
+//                moveArmToHookPoss = false;
+//                moveArmToPickupPos = false;
+//                moveArmToReadyPos = false;
+//            }
+        }
+        public void shoulderTargetForHanging(double reference) {
+            double maxPowDownS = 1;
+            // obtain the encoder position
+            encoderPosition = -shoulder.getCurrentPosition();
+            //telemetry.addData("shoulder pos: ", encoderPosition);
+
+            // calculate the error
+            error = reference - encoderPosition;
+
+            // rate of change of the error
+            derivative = (error - lastErrorS) / timerS.seconds();
+
+            // sum of all error over time
+            integralSumS = integralSumS + (error * timerS.seconds());
+
+            shoulderAngle = ((encoderPosition - 1350)/ticksPerRev)*(2*Math.PI);
+
+            double gravity = Math.cos(shoulderAngle) * GravityK + elbowGravity;
+
+            out = (.1 * error);
+
+            out = Math.max(Math.min(out, 1), -1);
+
+//            if (out > maxPowUpS){
+//                out = maxPowUpS;
+//            } else if (out < - maxPowDownS){
+//                out = -maxPowDownS;
+//            }
+
+            shoulder.setPower(out);
+
+            lastErrorS = error;
+
+            // reset the timer for next time
+            timerS.reset();
+        }
+        double elbowGravity = 0;
         public void elbowTarget( double reference, double maxPowDownE) {
             // obtain the encoder position
             encoderPosition = -elbow.getCurrentPosition();
@@ -533,12 +641,18 @@ public class Telop extends LinearOpMode {
             // sum of all error over time
             integralSumE = integralSumE + (error * timerE.seconds());
 
-            out = (KpE * error) + (KiE * integralSumE) + (KdE * derivative);
-            if (out > maxPowUpE){
-                out = maxPowUpE;
-            } else if (out < - maxPowDownE){
-                out = -maxPowDownE;
-            }
+            double elbowAngle = ((encoderPosition + 3344)/ticksPerRev)*(2*Math.PI) + shoulderAngle;
+
+            elbowGravity = Math.cos(elbowAngle) * GravityK2;
+
+            out = (KpE * error) + (KiE * integralSumE) + (KdE * derivative) + elbowGravity;
+
+            out = Math.max(Math.min(out, 1), -1);
+//            if (out > maxPowUpE){
+//                out = maxPowUpE;
+//            } else if (out < - maxPowDownE){
+//                out = -maxPowDownE;
+//            }
 
             elbow.setPower(out);
 
@@ -547,12 +661,92 @@ public class Telop extends LinearOpMode {
             // reset the timer for next time
             timerE.reset();
 
+            telemetry.addData("target", reference);
+            telemetry.addData("pos", encoderPosition);
+            //telemetry.addData("elbowAngle", elbowAngle);
+
 //            if (Math.abs(error) < 20) {
 //                moveArmToDropPos = false;
 //                moveArmToHookPoss = false;
 //                moveArmToPickupPos = false;
 //                moveArmToReadyPos = false;
 //            }
+        }
+        public void elbowTargetNoG( double reference, double maxPowDownE) {
+            // obtain the encoder position
+            encoderPosition = -elbow.getCurrentPosition();
+            //telemetry.addData("elbow pos: ", encoderPosition);
+            // calculate the error
+            error = reference - encoderPosition;
+
+            // rate of change of the error
+            derivative = (error - lastErrorE) / timerE.seconds();
+
+            // sum of all error over time
+            integralSumE = integralSumE + (error * timerE.seconds());
+
+            double elbowAngle = ((encoderPosition + 3344)/ticksPerRev)*(2*Math.PI) + shoulderAngle;
+
+            elbowGravity = Math.cos(elbowAngle) * GravityK2;
+
+            out = (KpE * error) + (KiE * integralSumE) + (KdE * derivative);
+
+            out = Math.max(Math.min(out, 1), -1);
+//            if (out > maxPowUpE){
+//                out = maxPowUpE;
+//            } else if (out < - maxPowDownE){
+//                out = -maxPowDownE;
+//            }
+
+            elbow.setPower(out);
+
+            lastErrorE = error;
+
+            // reset the timer for next time
+            timerE.reset();
+
+            telemetry.addData("elbowAngle", elbowAngle);
+
+//            if (Math.abs(error) < 20) {
+//                moveArmToDropPos = false;
+//                moveArmToHookPoss = false;
+//                moveArmToPickupPos = false;
+//                moveArmToReadyPos = false;
+//            }
+        }
+        public void elbowTargetForHanging( double reference, double maxPowDownE) {
+            // obtain the encoder position
+            encoderPosition = -elbow.getCurrentPosition();
+            //telemetry.addData("elbow pos: ", encoderPosition);
+            // calculate the error
+            error = reference - encoderPosition;
+
+            // rate of change of the error
+            derivative = (error - lastErrorE) / timerE.seconds();
+
+            // sum of all error over time
+            integralSumE = integralSumE + (error * timerE.seconds());
+
+            double elbowAngle = ((encoderPosition + 3344)/ticksPerRev)*(2*Math.PI) + shoulderAngle;
+
+            elbowGravity = Math.cos(elbowAngle) * GravityK2;
+
+            out = (.01 * error);
+
+            out = Math.max(Math.min(out, 1), -1);
+//            if (out > maxPowUpE){
+//                out = maxPowUpE;
+//            } else if (out < - maxPowDownE){
+//                out = -maxPowDownE;
+//            }
+
+            elbow.setPower(out);
+
+            lastErrorE = error;
+
+            // reset the timer for next time
+            timerE.reset();
+
         }
 
         double shoulderTargetPos = 0;

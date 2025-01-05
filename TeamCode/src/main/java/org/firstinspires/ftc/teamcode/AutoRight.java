@@ -4,24 +4,14 @@ import androidx.annotation.NonNull;
 
 import com.acmerobotics.dashboard.telemetry.TelemetryPacket;
 import com.acmerobotics.roadrunner.Action;
-import com.acmerobotics.roadrunner.Arclength;
 import com.acmerobotics.roadrunner.ParallelAction;
 import com.acmerobotics.roadrunner.Pose2d;
-import com.acmerobotics.roadrunner.Pose2dDual;
-import com.acmerobotics.roadrunner.PosePath;
-import com.acmerobotics.roadrunner.ProfileAccelConstraint;
 import com.acmerobotics.roadrunner.SequentialAction;
-import com.acmerobotics.roadrunner.SleepAction;
 import com.acmerobotics.roadrunner.TrajectoryActionBuilder;
-import com.acmerobotics.roadrunner.TrajectoryBuilderParams;
-import com.acmerobotics.roadrunner.TranslationalVelConstraint;
 import com.acmerobotics.roadrunner.Vector2d;
-import com.acmerobotics.roadrunner.VelConstraint;
 import com.acmerobotics.roadrunner.ftc.Actions;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
-import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
-import com.qualcomm.robotcore.hardware.ColorSensor;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
@@ -29,9 +19,8 @@ import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
-import org.firstinspires.ftc.teamcode.tuning.TuningOpModes;
-@Autonomous(name = "Auto", group = "A")
-public final class Auto extends LinearOpMode {
+@Autonomous(name = "AutoRight", group = "A")
+public final class AutoRight extends LinearOpMode {
     public class Arm {
         private DcMotorEx shoulder;
         private DcMotorEx elbow;
@@ -112,7 +101,7 @@ public final class Auto extends LinearOpMode {
 
             lastErrorS = error;
 
-            if (Math.abs(error) < 100) {
+            if (Math.abs(error) < 20) {
                 shoulder.setPower(0);
                 return false;
             } else {
@@ -152,7 +141,7 @@ public final class Auto extends LinearOpMode {
             // reset the timer for next time
             timerE.reset();
 
-            if (Math.abs(error) < 50) {
+            if (Math.abs(error) < 20) {
                 shoulder.setPower(0);
                 return false;
             } else {
@@ -210,6 +199,17 @@ public final class Auto extends LinearOpMode {
             return new ShoulderMoveBasket();
         }
 
+        public class ShoulderMoveToStart implements Action {
+            @Override
+            public boolean run(@NonNull TelemetryPacket packet) {
+                return shoulderTarget(0/*3500*/, .4);
+            }
+        }
+
+        public Action ShoulderMoveToStart() {
+            return new ShoulderMoveToStart();
+        }
+
         public class ElbowMoveToHookReady implements Action {
             @Override
             public boolean run(@NonNull TelemetryPacket packet) {
@@ -245,6 +245,16 @@ public final class Auto extends LinearOpMode {
         }
         public Action ElbowMoveToBasket() {
             return new ElbowMoveToBasket();
+        }
+
+        public class ElbowMoveToStart implements Action {
+            @Override
+            public boolean run(@NonNull TelemetryPacket packet) {
+                return elbowTarget(0 /*4137*/, .7);
+            }
+        }
+        public Action ElbowMoveToStart() {
+            return new ElbowMoveToStart();
         }
 
 
@@ -371,7 +381,7 @@ public final class Auto extends LinearOpMode {
 
     @Override
     public void runOpMode() throws InterruptedException {
-        Pose2d initialPose = new Pose2d(6, 64, Math.PI*.75);
+        Pose2d initialPose = new Pose2d(-6, 64, Math.PI*.75);
 
         MecanumDrive drive = new MecanumDrive(hardwareMap, initialPose);
 
@@ -379,20 +389,23 @@ public final class Auto extends LinearOpMode {
 
         TrajectoryActionBuilder pathToRungs = drive.actionBuilder(initialPose)
                 .setTangent(-Math.PI*.5)
-                .splineToConstantHeading(new Vector2d(6, 39), -Math.PI*.5)
+                .splineToConstantHeading(new Vector2d(-6, 39), -Math.PI*.5)
         ;
-        TrajectoryActionBuilder pathAwayFromRungs = drive.actionBuilder(new Pose2d(6, 39, -Math.PI*.25))
+        TrajectoryActionBuilder pathAwayFromRungs = drive.actionBuilder(new Pose2d(-6, 39, -Math.PI*.25))
         //Action secondTrajectoryActionChosen = pathToBuckets.fresh()
                 .setTangent(Math.PI*.5)
 //                .splineTo(new Vector2d(48.5, 48.5), -Math.PI*.5);
-                .splineToConstantHeading(new Vector2d(6, 46),0);
+                .splineToConstantHeading(new Vector2d(-6, 46),0);
                 //.splineToConstantHeading(new Vector2d(36, 24),-Math.PI*.5);
                 //.build();
-        TrajectoryActionBuilder pathTo1stSpikeMark = drive.actionBuilder(new Pose2d(6, 46, Math.PI*.75))
-                .setTangent(0)
+        TrajectoryActionBuilder pathTo1stSpikeMark = drive.actionBuilder(new Pose2d(-6, 46, Math.PI*.75))
+                .setTangent(1)
                 //.splineToSplineHeading(new Pose2d(46, 46, Math.PI*.75),-Math.PI*.5);
 
-                .splineToConstantHeading(new Vector2d(51, 52), 0);
+                .splineToConstantHeading(new Vector2d(-30, 46), 1)
+                .splineToConstantHeading(new Vector2d(-36, 6), 1)
+                .splineToConstantHeading(new Vector2d(-48, 24), Math.PI*.5)
+                .splineToConstantHeading(new Vector2d(-48, 50), Math.PI*.5);
         TrajectoryActionBuilder pathToPickUpBlock1 = drive.actionBuilder(new Pose2d(51, 52, Math.PI*.75))
                 .setTangent(-Math.PI*.5)
                 .splineToConstantHeading(new Vector2d(51, 37), -Math.PI*.5);
@@ -483,36 +496,41 @@ public final class Auto extends LinearOpMode {
                     arm.ShoulderMoveToHook(),
                     arm.OpenClaw(),
                     arm.ElbowMoveToDriving(),
-                    driveTo1stSpikeMark,
                     new ParallelAction(
-                            arm.ShoulderMovePickUpReady(),
-                            arm.ElbowMoveToPickUp(),
-                            arm.ReddyClaw()),
-                    arm.ShoulderMovePickUp(),
-                    driveToPickUpBlock1,
-                    arm.CloseClaw(),
-                    driveToBuckets,
-                    new ParallelAction(
-                            arm.ShoulderMoveBasket(),
-                            arm.ElbowMoveToBasket()),
-                    //arm.basketClaw(),
-                    arm.BasketClaw2(),
-                    arm.OpenClaw2(),
-                    new ParallelAction(
-                            arm.ShoulderMovePickUpReady(),
-                            arm.ElbowMoveToPickUp(),
-                            arm.ReddyClaw()),
-                    driveTo2ndSpikeMark,
-                    arm.ShoulderMovePickUp(),
-                    driveToPickUpBlock2,
-                    arm.CloseClaw(),
-                    driveToBuckets2,
-                    new ParallelAction(
-                            arm.ShoulderMoveBasket(),
-                            arm.ElbowMoveToBasket()),
-                    //arm.basketClaw(),
-                    arm.BasketClaw2(),
-                    arm.OpenClaw2()
+                            arm.ShoulderMoveToHookReady(),
+                            arm.ElbowMoveToStart(),
+                            driveTo1stSpikeMark
+                    )
+
+//                    new ParallelAction(
+//                            arm.ShoulderMovePickUpReady(),
+//                            arm.ElbowMoveToPickUp(),
+//                            arm.ReddyClaw()),
+//                    arm.ShoulderMovePickUp(),
+//                    driveToPickUpBlock1,
+//                    arm.CloseClaw(),
+//                    driveToBuckets,
+//                    new ParallelAction(
+//                            arm.ShoulderMoveBasket(),
+//                            arm.ElbowMoveToBasket()),
+//                    //arm.basketClaw(),
+//                    arm.BasketClaw2(),
+//                    arm.OpenClaw2(),
+//                    new ParallelAction(
+//                            arm.ShoulderMovePickUpReady(),
+//                            arm.ElbowMoveToPickUp(),
+//                            arm.ReddyClaw()),
+//                    driveTo2ndSpikeMark,
+//                    arm.ShoulderMovePickUp(),
+//                    driveToPickUpBlock2,
+//                    arm.CloseClaw(),
+//                    driveToBuckets2,
+//                    new ParallelAction(
+//                            arm.ShoulderMoveBasket(),
+//                            arm.ElbowMoveToBasket()),
+//                    //arm.basketClaw(),
+//                    arm.BasketClaw2(),
+//                    arm.OpenClaw2()
 
 //                    arm.MoveToReady(),
 
