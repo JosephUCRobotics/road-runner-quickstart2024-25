@@ -19,8 +19,8 @@ import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
-@Autonomous(name = "AutoRight", group = "B")
-public final class AutoRight extends LinearOpMode {
+@Autonomous(name = "AutoLeft", group = "B")
+public final class AutoLeft extends LinearOpMode {
     public class Arm {
         private DcMotorEx shoulder;
         private DcMotorEx elbow;
@@ -101,7 +101,7 @@ public final class AutoRight extends LinearOpMode {
 
             lastErrorS = error;
 
-            if (Math.abs(error) < 20) {
+            if (Math.abs(error) < 50) {
                 shoulder.setPower(0);
                 return false;
             } else {
@@ -199,17 +199,6 @@ public final class AutoRight extends LinearOpMode {
             return new ShoulderMoveBasket();
         }
 
-        public class ShoulderMoveToStart implements Action {
-            @Override
-            public boolean run(@NonNull TelemetryPacket packet) {
-                return shoulderTarget(0/*3500*/, .4);
-            }
-        }
-
-        public Action ShoulderMoveToStart() {
-            return new ShoulderMoveToStart();
-        }
-
         public class ElbowMoveToHookReady implements Action {
             @Override
             public boolean run(@NonNull TelemetryPacket packet) {
@@ -245,16 +234,6 @@ public final class AutoRight extends LinearOpMode {
         }
         public Action ElbowMoveToBasket() {
             return new ElbowMoveToBasket();
-        }
-
-        public class ElbowMoveToStart implements Action {
-            @Override
-            public boolean run(@NonNull TelemetryPacket packet) {
-                return elbowTarget(0 /*4137*/, .7);
-            }
-        }
-        public Action ElbowMoveToStart() {
-            return new ElbowMoveToStart();
         }
 
 
@@ -381,31 +360,22 @@ public final class AutoRight extends LinearOpMode {
 
     @Override
     public void runOpMode() throws InterruptedException {
-        Pose2d initialPose = new Pose2d(-6, 64, Math.PI*.75);
+        Pose2d initialPose = new Pose2d(18, 64, Math.PI*.75);
 
         MecanumDrive drive = new MecanumDrive(hardwareMap, initialPose);
 
         Arm arm = new Arm(hardwareMap);
 
         TrajectoryActionBuilder pathToRungs = drive.actionBuilder(initialPose)
-                .setTangent(-Math.PI*.5)
-                .splineToConstantHeading(new Vector2d(-6, 39), -Math.PI*.5)
-        ;
-        TrajectoryActionBuilder pathAwayFromRungs = drive.actionBuilder(new Pose2d(-6, 39, -Math.PI*.25))
-        //Action secondTrajectoryActionChosen = pathToBuckets.fresh()
-                .setTangent(Math.PI*.5)
-//                .splineTo(new Vector2d(48.5, 48.5), -Math.PI*.5);
-                .splineToConstantHeading(new Vector2d(-6, 46),0);
-                //.splineToConstantHeading(new Vector2d(36, 24),-Math.PI*.5);
-                //.build();
-        TrajectoryActionBuilder pathTo1stSpikeMark = drive.actionBuilder(new Pose2d(-6, 46, Math.PI*.75))
-                .setTangent(1)
+                .setTangent(-Math.PI*.1)
+                .splineToSplineHeading(new Pose2d(55, 55, Math.PI*.5), 0)
+                ;
+
+        TrajectoryActionBuilder pathTo1stSpikeMark = drive.actionBuilder(new Pose2d(6, 46, Math.PI*.75))
+                .setTangent(-Math.PI*.6)
                 //.splineToSplineHeading(new Pose2d(46, 46, Math.PI*.75),-Math.PI*.5);
 
-                .splineToConstantHeading(new Vector2d(-30, 46), 1)
-                .splineToConstantHeading(new Vector2d(-36, 6), 1)
-                .splineToConstantHeading(new Vector2d(-48, 24), Math.PI*.5)
-                .splineToConstantHeading(new Vector2d(-48, 50), Math.PI*.5);
+                .splineToSplineHeading(new Pose2d(48, 36, Math.PI*.75), -Math.PI*.5);
         TrajectoryActionBuilder pathToPickUpBlock1 = drive.actionBuilder(new Pose2d(51, 52, Math.PI*.75))
                 .setTangent(-Math.PI*.5)
                 .splineToConstantHeading(new Vector2d(51, 37), -Math.PI*.5);
@@ -473,7 +443,7 @@ public final class AutoRight extends LinearOpMode {
 
 
         Action firstTrajectoryActionChosen = pathToRungs.build();
-        Action secondTrajectoryActionChosen = pathAwayFromRungs.build();
+        Action secondTrajectoryActionChosen = pathTo1stSpikeMark.build();
         Action driveTo1stSpikeMark = pathTo1stSpikeMark.build();
         Action driveTo2ndSpikeMark = pathTo2ndSpikeMark.build();
         Action driveToPickUpBlock1 = pathToPickUpBlock1.build();
@@ -490,18 +460,24 @@ public final class AutoRight extends LinearOpMode {
                     arm.startClaw(),
                     arm.ShoulderMoveToHookReady(),
                     firstTrajectoryActionChosen,
+                    arm.ElbowMoveToHookReady(),
                     new ParallelAction(
-                        arm.ShoulderMoveToHookReady(),
-                        arm.ElbowMoveToHookReady()),
-                    arm.ShoulderMoveToHook(),
-                    arm.OpenClaw(),
-                    arm.ElbowMoveToDriving(),
+                            arm.ShoulderMoveBasket(),
+                            arm.ElbowMoveToBasket()
+                    ),
+                    arm.ReddyClaw(),
                     new ParallelAction(
-                            arm.ShoulderMoveToHookReady(),
-                            arm.ElbowMoveToStart(),
-                            driveTo1stSpikeMark
-                    )
-
+                            arm.ElbowMoveToPickUp(),
+                            arm.ReddyClaw()),
+                    arm.ShoulderMovePickUp(),
+                    secondTrajectoryActionChosen
+//                    new ParallelAction(
+//                        arm.ShoulderMoveToHookReady(),
+//                        arm.ElbowMoveToHookReady()),
+//                    arm.ShoulderMoveToHook(),
+//                    arm.OpenClaw(),
+//                    arm.ElbowMoveToDriving(),
+//                    driveTo1stSpikeMark,
 //                    new ParallelAction(
 //                            arm.ShoulderMovePickUpReady(),
 //                            arm.ElbowMoveToPickUp(),

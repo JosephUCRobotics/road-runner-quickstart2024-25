@@ -30,7 +30,7 @@ import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
 import org.firstinspires.ftc.teamcode.tuning.TuningOpModes;
-@Autonomous(name = "Auto", group = "A")
+@Autonomous(name = "Auto", group = "B")
 public final class Auto extends LinearOpMode {
     public class Arm {
         private DcMotorEx shoulder;
@@ -65,17 +65,18 @@ public final class Auto extends LinearOpMode {
         double error;
         double derivative;
         double out;
+
         public double KpS = .002;
         public double KiS = .00000;
         public double KdS = 0.0001;
         public double maxPowUpS = 1;
-        public double KpE = .002;
-        public double KiE = .00000;
-        public double KdE = 0.0003;
+        public double KpE = .003;
+        public double KiE = .0000;
+        public double KdE = 0.0001;
         public double maxPowUpE = .7;
         double shoulderAngle = 0;
         double elbowGravity = 0;
-        double ticksPerRev = 8192;
+        double ticksPerRev = 1;
         double GravityK = .02;
         double GravityK2 = .15;
         public boolean shoulderTarget(double reference, double maxPowDownS) {

@@ -14,10 +14,16 @@ import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.util.ElapsedTime;
+import com.sun.tools.javac.comp.Todo;
 
-@TeleOp(name = "Telop", group = "B")
+import java.util.HashMap;
+import java.util.Map;
+
+//import org.apache.commons.lang3.time.StopWatch;
+
+@TeleOp(name = "TelopQualifier", group = "A")
 @Config
-public class Telop extends LinearOpMode {
+public class TelopPathControledArm extends LinearOpMode {
     MecanumDrive drive;
     boolean moveArmToDropPos = false;
     boolean moveArmToPickupPos = false;
@@ -25,8 +31,11 @@ public class Telop extends LinearOpMode {
     boolean moveArmToHookPoss = false;
     double dropPos = 0;
     double headingReset = 0;
-    boolean closeClaw = false;
+    int closeClaw = 0;
     boolean targetHangeClaw = false;
+
+    boolean moveArmWithPath = false;
+    boolean pathMoveSet = false;
 
 
     public static double elbowGravityCorection = .1;
@@ -44,13 +53,15 @@ public class Telop extends LinearOpMode {
     public static double maxPowUpE = .7;
     public static double maxPowDownE = .001;
     boolean lastWasJoystick = false;
-    boolean clawTargetUp = false;
+    boolean clawTargetUp = true;
     boolean clawSpinLeft = false;
     boolean clawSpinRight = false;
     boolean shoulderTargetPosSet = false;
     boolean elbowTargetPosSet = false;
     boolean hangTimerSet = false;
     ElapsedTime hangTimer = new ElapsedTime();
+    ElapsedTime moveToNextTime = new ElapsedTime();
+    boolean moveToNextTimeUsed = true;
     boolean hangTimer2Set = false;
     ElapsedTime hangTimer2 = new ElapsedTime();
     int hangSegment = 0;
@@ -75,11 +86,14 @@ public class Telop extends LinearOpMode {
     boolean hangManualy = false;
     boolean shoulderAtTarget = false;
     boolean elbowAtTarget = false;
+
+    boolean clawDown = false;
+    double manualClawPos = 0;
     @Override
     public void runOpMode() throws InterruptedException {
         telemetry = new MultipleTelemetry(telemetry, FtcDashboard.getInstance().getTelemetry());
 
-        drive = new MecanumDrive(hardwareMap, new Pose2d(0, 0, -Math.PI));
+        drive = new MecanumDrive(hardwareMap, new Pose2d(0, 0, -Math.PI*.75));
         //shoulderController = new PIDController(1,0, 0);
         double rightFrontStart = drive.rightFront.getCurrentPosition();
         double leftFrontStart = drive.leftFront.getCurrentPosition();
@@ -113,6 +127,9 @@ public class Telop extends LinearOpMode {
         boolean lastGamepad2A = false;
         boolean cutDrivePow = false;
         boolean lastG2Back = false;
+
+        Map<String, Double> moveS = new HashMap<>();;
+        Map<String, Double> moveE = new HashMap<>();;
 
 
         waitForStart();
@@ -175,15 +192,23 @@ public class Telop extends LinearOpMode {
             }
 
             if(gamepad2.right_bumper || gamepad1.a){
+                clawDown = false;
                 if(!lastGamepad2A){
-                    closeClaw = !closeClaw;
+                    if(closeClaw != 0) {
+                        closeClaw = 0;
+                    } else {
+                        closeClaw = 2;
+                    }
                 }
                 lastGamepad2A = true;
             } else {
                 lastGamepad2A = false;
             }
 
+
+
             if(gamepad2.left_bumper){
+                clawDown = false;
                 if(!lastGamepadB){
                     clawTargetUp = !clawTargetUp;
                     targetHangeClaw = false;
@@ -194,51 +219,55 @@ public class Telop extends LinearOpMode {
             }
             
             if(gamepad1.x){
+                clawDown = true;
                 if(!lastGamepadX){
-                    moveArmToReadyPos = !moveArmToReadyPos;
-                    moveArmToDropPos = false;
-                    moveArmToPickupPos = false;
-                    moveArmToHookPoss = false;
+                    if(closeClaw != 0) {
+                        closeClaw = 0;
+                    } else {
+                        closeClaw = 1;
+                    }
                 }
                 lastGamepadX = true;
             } else {
                 lastGamepadX = false;
             }
 
-            if(gamepad1.y){
-                if(!lastGamepadY){
-                    dropPos = Math.abs(drive.pose.position.x) + Math.abs(drive.pose.position.y);
-                }
-                lastGamepadY = true;
-            } else {
-                lastGamepadY = false;
-            }
+//            if(gamepad1.y){
+//                if(!lastGamepadY){
+//                    dropPos = Math.abs(drive.pose.position.x) + Math.abs(drive.pose.position.y);
+//                }
+//                lastGamepadY = true;
+//            } else {
+//                lastGamepadY = false;
+//            }
 
 
             if(targetHangeClaw){
                 arm.targetHangPos();
-                closeClaw = false;
+                closeClaw = 2;
             } else {
-                arm.levelClaw(clawTargetUp, gamepad2.left_trigger);
+                arm.levelClaw(clawTargetUp, manualClawPos, clawDown);
             }
+            manualClawPos = gamepad2.left_trigger;
             arm.closeClaw(closeClaw);
             arm.spinClaw();
 
             if (gamepad1.start){
-                headingReset = drive.pose.heading.toDouble();
+                headingReset = drive.pose.heading.toDouble()+Math.PI * .75;
                 targetAngle = drive.pose.heading.toDouble()-headingReset;
             }
 
-            if (gamepad2.a || gamepad1.x) {
-                arm.shoulderTarget(1340);
-//                if (gamepad2.right_bumper || gamepad1.a) {
-//                    arm.elbowTarget(-5925, .7);
-//                } else {
-                    arm.elbowTarget(-5695,1);
-//                }
+            if (gamepad2.a) {
+                if (!pathMoveSet){
+                    moveS = arm.setMove(-shoulder.getCurrentPosition(), 1455, 1500, 3000);
+                    moveE = arm.setMove(-elbow.getCurrentPosition(), -5695, 1500, 3000);
+                    pathMoveSet = true;
+                    moveArmWithPath = true;
+                }
                 elbowTargetPosSet = false;
                 shoulderTargetPosSet = false;
                 clawTargetUp = true;
+                clawDown = false;
 
 //            } else if (moveArmToPickupPos) {
 //                arm.moveArmToPoss(12195);
@@ -247,17 +276,42 @@ public class Telop extends LinearOpMode {
 //            } else if (moveArmToDropPos) {
 //                arm.moveArmToPoss(4525);
             } else if (gamepad2.right_trigger > .4) {
-                arm.shoulderTarget(3700);
-                arm.elbowTarget(-4000,1);
+                if (!pathMoveSet){
+                    moveS = arm.setMove(-shoulder.getCurrentPosition(), 3700, 1500, 3000);  // 3600
+                    moveE = arm.setMove(-elbow.getCurrentPosition(), -4150, 1500, 3000);    //3800
+                    pathMoveSet = true;
+                    moveArmWithPath = true;
+                }
+                clawDown = false;
+                if (Math.abs(3700 - (-shoulder.getCurrentPosition())) < 150 && Math.abs(-4150 - (-elbow.getCurrentPosition())) < 150){//ToDo this will audo drop
+                    closeClaw = 2;
+                }
+                elbowTargetPosSet = false;
+                shoulderTargetPosSet = false;
+
+                manualClawPos = .4;
+            } else if (gamepad2.y) {
+                if (!pathMoveSet){
+                    moveS = arm.setMove(-shoulder.getCurrentPosition(), 2700, 1500, 3000);
+                    moveE = arm.setMove(-elbow.getCurrentPosition(), -5430, 1500, 3000);
+                    pathMoveSet = true;
+                    moveArmWithPath = true;
+                }
                 elbowTargetPosSet = false;
                 shoulderTargetPosSet = false;
                 clawTargetUp = true;
-            } else if (gamepad2.y || gamepad1.y) {
-                arm.shoulderTarget(2700);
-                arm.elbowTarget(-5430,1);
+                clawDown = false;
+            } else if (gamepad1.y) {
+                if (!pathMoveSet){
+                    moveS = arm.setMove(-shoulder.getCurrentPosition(), 1550, 1500, 3000);
+                    moveE = arm.setMove(-elbow.getCurrentPosition(), -4540, 1500, 3000);
+                    pathMoveSet = true;
+                    moveArmWithPath = true;
+                }
                 elbowTargetPosSet = false;
                 shoulderTargetPosSet = false;
                 clawTargetUp = true;
+                closeClaw = 1;
             } else if (gamepad2.dpad_up) {
                 cutDrivePow = false;
                 arm.shoulderTarget(2500);
@@ -274,6 +328,7 @@ public class Telop extends LinearOpMode {
                 hangTimer2Set = false;
                 hangSegment = 0;
                 hangManualy = false;
+                clawDown = false;
             } else if (gamepad2.dpad_left) {
                 cutDrivePow = true;
                 hangTimer2Set = false;
@@ -281,7 +336,12 @@ public class Telop extends LinearOpMode {
                     hangTimer.reset();
                 }
                 hangTimerSet = true;
-                if (shoulderAtTarget && elbowAtTarget) {
+                if (shoulderAtTarget && elbowAtTarget && moveToNextTimeUsed && hangSegment != 4) {
+                    moveToNextTimeUsed = false;
+                    moveToNextTime.reset();
+                }
+                if (moveToNextTime.seconds() > .3 && !moveToNextTimeUsed){
+                    moveToNextTimeUsed = true;
                     elbowAtTarget = false;
                     shoulderAtTarget = false;
                     hangSegment ++;
@@ -298,22 +358,25 @@ public class Telop extends LinearOpMode {
                     arm.shoulderTargetNoG(1300);
                     arm.elbowTargetNoG(-200, 1);
                 } else if (hangSegment == 3) {
-                    arm.shoulderTargetNoG(1300);
+                    arm.shoulderTargetNoG(1350);
                     arm.elbowTargetNoG(-3000, 1);
                 } else if (hangSegment == 4) {
-                    arm.shoulderTargetNoG(2450);//2150
-                    arm.elbowTargetNoG(-5425, 1);
+                    arm.shoulderTargetNoG(2415);//2375
+                    arm.elbowTargetNoG(-5060, 1);  //5080
                 } else if (hangSegment == 5) {
-                    arm.shoulderTargetNoG(2350);
-                    arm.elbowTargetNoG(-6450, 1);
+                    arm.shoulderTargetNoG(2360);
+                    arm.elbowTargetNoG(-5500, 1);
                 } else if (hangSegment == 6) {
-                    arm.shoulderTargetForHanging(1500);
-                    arm.elbowTargetNoG(-6450, 1);
+                    arm.shoulderTargetForHanging(2850); //noG //2350
+                    arm.elbowTargetNoG(-6400, 1);
                 } else if (hangSegment == 7) {
-                    arm.shoulderTargetForHanging(200);
-                    arm.elbowTargetNoG(-5230, 1);
-                }else if (hangSegment == 8) {
-                    arm.shoulderTargetNoG(150);
+                    arm.shoulderTargetForHanging(1500);
+                    arm.elbowTargetNoG(-6400, 1);
+                } else if (hangSegment == 8) {
+                    arm.shoulderTargetForHanging(440);
+                    arm.elbowTargetNoG(-5200, 1);
+                }else if (hangSegment == 9) {
+                    arm.shoulderTargetNoG(370);
                     arm.elbowTargetForHanging(-5700, 1);
                 }
 //                if (hangTimer.seconds() < 3){
@@ -347,6 +410,7 @@ public class Telop extends LinearOpMode {
                 shoulderTargetPosSet = false;
                 targetHangeClaw = true;
                 hangManualy = false;
+                clawDown = false;
             } else if (gamepad2.dpad_down) {
 //                arm.shoulderTarget(325);
 //                arm.elbowTarget(-200, 1);
@@ -384,6 +448,8 @@ public class Telop extends LinearOpMode {
 //                shoulderTargetPosSet = false;
 //                targetHangeClaw = true;
             } else {
+                moveArmWithPath = false;
+                pathMoveSet = false;
                 lastWasJoystick = true;
                 double shoulderPos = -shoulder.getCurrentPosition();
 
@@ -400,12 +466,21 @@ public class Telop extends LinearOpMode {
 //                        arm.moveElbow(-gamepad2.left_stick_y);
 //                    }
                 }
-                if (-gamepad2.left_stick_y >= 0 && shoulderPos > 2300 && -elbow.getCurrentPosition() > -3700) {
-                    arm.elbowTarget( -3700, 1);
+                if (-gamepad2.left_stick_y >= 0 && shoulderPos > 2300 && -elbow.getCurrentPosition() > -3800) {
+                    arm.elbowTarget( -3800, 1);
                 } else if (!hangManualy) {
-                    arm.moveElbowManually(-gamepad2.left_stick_y);
+                    arm.moveElbowManually(-gamepad2.left_stick_y + (-gamepad1.right_stick_y));
                 }
+            }
 
+
+
+            if (moveArmWithPath) {
+                double shoulderTarget = arm.calcCurrentTargetPos(moveS);
+                double elbowTarget = arm.calcCurrentTargetPos(moveE);
+
+                arm.shoulderTargetForPath(shoulderTarget);
+                arm.elbowTargetForPath(elbowTarget);
             }
 
             if (!cutDrivePow && !hangManualy){
@@ -479,13 +554,53 @@ public class Telop extends LinearOpMode {
             clawSpin = hardwareMap.get(Servo.class, "clawSpin");
             clawUp = hardwareMap.get(Servo.class, "clawUp");
         }
+        public double calcCurrentTargetPos(Map<String, Double> move) {
 
-        public void closeClaw(boolean close){
-            if (close){
+            // Set the previous, current and total move time
+            double moveTime = getRuntime() - move.get("moveStartTime");
+
+            double moveEndTime = move.get("moveEndTime");
+            double accel = move.get("accel");
+            double P1 = move.get("P1");
+            double P2 = move.get("P2");
+            double P3 = move.get("P3");
+            double peakVel = move.get("peakVel");
+            telemetry.addData("P1", P1);
+            // if the move is over set the move to go to the last pos by setting the time to the last time
+            if (moveTime > moveEndTime) {
+                moveTime = moveEndTime;
+            }
+
+            double Pmove;
+            if (Math.abs(move.get("length")) <= 2 * Math.abs(P1)) {
+                // Triangle
+                if (moveTime <= moveEndTime / 2) {
+                    Pmove =  0.5 * accel * Math.pow(moveTime, 2);
+                } else {
+                    Pmove = -0.5 * accel * Math.pow(moveTime, 2) + P2 * moveTime + P3;
+                }
+            } else {
+                // Trapezoid
+                double timeA = peakVel / accel;
+                if (moveTime <= timeA) {
+                    Pmove = 0.5 * accel * Math.pow(moveTime, 2);
+                } else if (moveTime <= moveEndTime - timeA) {
+                    Pmove = peakVel * moveTime + P1;
+                } else {
+                    Pmove = -0.5 * accel * Math.pow(moveTime, 2) + P2 * moveTime + P3;
+                }
+            }
+            double targetPos = move.get("startPos") + Pmove;
+            return targetPos;
+        }
+
+        public void closeClaw(int close){
+            if (close == 0){
                 clawClose.setPosition(.45);
+            } else if (close == 1){
+                    clawClose.setPosition(.34);
             } else {
                 clawClose.setPosition(.2);
-
             }
         }
         public void targetHangPos(){
@@ -502,10 +617,10 @@ public class Telop extends LinearOpMode {
         }
         double endArmAngle;
         double servoTarget;
-        public void levelClaw(boolean flat, double pos){
-            if (pos ==0 || -elbow.getCurrentPosition() > -4144 && -elbow.getCurrentPosition() < -2619){
+        public void levelClaw(boolean flat, double pos, boolean down){
+            if (pos ==0 || -elbow.getCurrentPosition() > -4144 && -elbow.getCurrentPosition() < -2619 || -shoulder.getCurrentPosition() < 3000){
                 endArmAngle = ((-shoulder.getCurrentPosition() - 1457)/8192.0 * 2*Math.PI)+ ((-elbow.getCurrentPosition() + 3344)/8192.0 * 2*Math.PI);
-                servoTarget = -endArmAngle/Math.PI*.75+.11;
+                servoTarget = -endArmAngle/Math.PI*.75+.04;  // +.11
                 if (-elbow.getCurrentPosition() > -4144 && -elbow.getCurrentPosition() < -2619) {
                     flat = false;
                 }
@@ -518,8 +633,11 @@ public class Telop extends LinearOpMode {
                 if (servoTarget > .69){
                     servoTarget = .69;
                 }
+                if (down){
+                    servoTarget = .15;
+                }
             } else {
-                servoTarget = pos * .69;
+                servoTarget = pos * .69; //69
             }
 //            telemetry.addData("servo target: ", servoTarget);
 //            telemetry.addData("servo current: ", clawUp.getPosition());
@@ -629,7 +747,7 @@ public class Telop extends LinearOpMode {
 
             shoulder.setPower(out);
 
-            if (Math.abs(error) < 75){
+            if (Math.abs(error) < 200){
                 shoulderAtTarget = true;
             } else {
                 shoulderAtTarget = false;
@@ -679,9 +797,9 @@ public class Telop extends LinearOpMode {
 
             shoulder.setPower(out);
 
-            if (Math.abs(error) < 50){
+            if (Math.abs(error) < 200){
                 shoulderAtTarget = true;
-            }  else if (Math.abs(error) > 50){
+            }  else if (Math.abs(error) > 200){
                 shoulderAtTarget = false;
             }
 
@@ -763,9 +881,9 @@ public class Telop extends LinearOpMode {
 
             elbow.setPower(out);
 
-            if (Math.abs(error) < 50){
+            if (Math.abs(error) < 200){
                 elbowAtTarget = true;
-            }  else if (Math.abs(error) > 50){
+            }  else if (Math.abs(error) > 200){
                 shoulderAtTarget = false;
             }
 
@@ -812,15 +930,177 @@ public class Telop extends LinearOpMode {
             elbow.setPower(out);
 
             lastErrorE = error;
-            if (Math.abs(error) < 50){
+            if (Math.abs(error) < 200){
                 elbowAtTarget = true;
-            }  else if (Math.abs(error) > 50){
+            }  else if (Math.abs(error) > 200){
                 shoulderAtTarget = false;
             }
 
             // reset the timer for next time
             timerE.reset();
 
+        }
+        int ticksPerRev = 8192;
+        double shoulderAngle = 0;
+
+        public void shoulderTargetForPath(double reference) {
+            double maxPowDownS = 1;
+            // obtain the encoder position
+            double encoderPosition = -shoulder.getCurrentPosition();
+            //telemetry.addData("shoulder pos: ", encoderPosition);
+
+            // calculate the error
+            double error = reference - encoderPosition;
+
+            // rate of change of the error
+            double derivative = (error - lastErrorS) / timerS.seconds();
+
+            // sum of all error over time
+            integralSumS = integralSumS + (error * timerS.seconds());
+
+            shoulderAngle = ((encoderPosition - 1350)/ticksPerRev)*(2*Math.PI);
+
+            double gravity = Math.cos(shoulderAngle) * .02 + elbowGravity;
+
+            double out = (0.002 * error) + (0 * integralSumS) + (0.0001 * derivative);
+
+            out = Math.max(Math.min(out, 1), -1);
+
+            out += gravity;
+
+//            if (out > maxPowUpS){
+//                out = maxPowUpS;
+//            } else if (out < - maxPowDownS){
+//                out = -maxPowDownS;
+//            }
+
+            shoulder.setPower(out);
+
+            lastErrorS = error;
+
+            // reset the timer for next time
+            timerS.reset();
+            telemetry.addData("Target Pos: ", reference/5000);
+            telemetry.addData("Current Pos: ", encoderPosition/5000);
+            telemetry.addData("P Pow: ", Math.max(Math.min(KpS * error, 1), -1));
+            telemetry.addData("I Pow: ", Math.max(Math.min(KiS * integralSumS, 1), -1));
+            telemetry.addData("D Pow: ", Math.max(Math.min(KdS * derivative, 1), -1));
+            telemetry.addData("G Pow: ", gravity);
+            telemetry.addData("out Pow: ",out);
+
+
+
+//            if (Math.abs(error) < 20) {
+//                moveArmToDropPos = false;
+//                moveArmToHookPoss = false;
+//                moveArmToPickupPos = false;
+//                moveArmToReadyPos = false;
+//            }
+        }
+
+        double GravityKE = 0.15;
+        public void elbowTargetForPath( double reference) {
+            // obtain the encoder position
+            double encoderPosition = -elbow.getCurrentPosition();
+            //telemetry.addData("elbow pos: ", encoderPosition);
+            // calculate the error
+            double error = reference - encoderPosition;
+
+            // rate of change of the error
+            double derivative = (error - lastErrorE) / timerE.seconds();
+
+            // sum of all error over time
+            integralSumE = integralSumE + (error * timerE.seconds());
+
+            double elbowAngle = ((encoderPosition + 3344)/ticksPerRev)*(2*Math.PI) + shoulderAngle;
+
+            elbowGravity = Math.cos(elbowAngle) * GravityKE;
+
+            double out = (.003 * error) + (0 * integralSumE) + (0.0001 * derivative) + elbowGravity;
+
+            out = Math.max(Math.min(out, 1), -1);
+//            if (out > maxPowUpE){
+//                out = maxPowUpE;
+//            } else if (out < - maxPowDownE){
+//                out = -maxPowDownE;
+//            }
+
+            elbow.setPower(out);
+
+            lastErrorE = error;
+
+            // reset the timer for next time
+            timerE.reset();
+
+            telemetry.addData("target", reference);
+            telemetry.addData("pos", encoderPosition);
+            //telemetry.addData("elbowAngle", elbowAngle);
+
+//            if (Math.abs(error) < 20) {
+//                moveArmToDropPos = false;
+//                moveArmToHookPoss = false;
+//                moveArmToPickupPos = false;
+//                moveArmToReadyPos = false;
+//            }
+        }
+        public Map<String, Double> setMove(double currentPos, double targetPos, double accel, double peakVel) {
+
+            //s += "move is set";
+
+            Map<String, Double> move = new HashMap<>();
+
+            // Set the total distance of the move
+            double length = targetPos - currentPos;
+
+            accel = Math.abs(accel);
+            peakVel = Math.abs(peakVel);
+
+            //if (length < 0){
+            //    accel *= -1;
+            //    peakVel *= -1;
+            //}
+
+            // Set the pos at T1 = 1/2 Vmax * t1
+            // If the triangle was the biggest size is just length / 2
+            double P1 = -0.5 * (Math.pow(peakVel, 2) / accel);
+
+            double moveEndTime;
+
+            // Decide if the move is a trapezoid or a triangle
+            if (Math.abs(length) <= 2 * -P1) {
+                // Triangle
+                // Calc the move end time 2 + Vmax/A ????????
+                moveEndTime = 2 * Math.sqrt(Math.abs(length) / accel);
+
+            } else {
+                // Trapezoid
+                // Calc the move end time L/Vmax + Vmax/A
+                moveEndTime = Math.abs(length) / peakVel + peakVel / accel;
+            }
+            double P2 = accel * moveEndTime;
+            double P3 = Math.abs(length) - 0.5 * accel * Math.pow(moveEndTime, 2);
+
+            if (length < 0){
+                accel *= -1;
+                peakVel *= -1;
+                P1 *= -1;
+                P2 *= -1;
+                P3 *= -1;
+            }
+
+            move.put("P1", P1);
+            move.put("P2",P2);
+            move.put("P3",P3);
+            move.put("length", length);
+            move.put("moveEndTime", moveEndTime);
+            move.put("moveStartTime",  getRuntime());
+            move.put("startPos", currentPos);
+            move.put("accel", accel);
+            move.put("peakVel", peakVel);
+            //s += getRuntime();
+            // Set the start time of the move
+            // This works because this function is only run ones at the beginning of each move
+            return move;
         }
 
         double shoulderTargetPos = 0;
@@ -980,9 +1260,9 @@ public class Telop extends LinearOpMode {
 
         int ticksPerMotorRev = 8192;
         double gearRatio = 1;
-        double ticksPerRev = ticksPerMotorRev * gearRatio;
+        //double ticksPerRev = ticksPerMotorRev * gearRatio;
         double maxVelocity = 0.125;
-        double shoulderAngle = 0;
+        //double shoulderAngle = 0;
 
         public void moveShoulder(double powIn){
             double direction = 1;
