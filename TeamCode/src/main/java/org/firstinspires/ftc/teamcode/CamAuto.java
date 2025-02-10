@@ -1,5 +1,5 @@
 package org.firstinspires.ftc.teamcode;
-/*
+
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.util.Size;
@@ -61,6 +61,19 @@ public class CamAuto extends LinearOpMode {
         int Portal_1_View_ID = ((Integer) JavaUtil.inListGet(myPortalsList, JavaUtil.AtMode.FROM_START, 0, false)).intValue();
 
         BlobProcessor blob = new BlobProcessor();
+
+        VisionPortal.Builder builder = new VisionPortal.Builder();
+
+        WebcamName webcam1 = hardwareMap.get(WebcamName.class, "Webcam 1");
+
+        builder.setCamera(webcam1);
+
+        builder.setCameraResolution(new Size(1280, 960));
+
+        // Choose whether or not LiveView stops if no processors are enabled.
+        // If set "true", monitor shows solid orange screen if no processors enabled.
+        // If set "false", monitor shows camera view without annotations.
+        builder.setAutoStopLiveView(true);}}
 
 
         // Create the AprilTag processor.
@@ -196,5 +209,4 @@ import org.opencv.core.Mat;CameraReader cameraReader = new CameraReader(1);
             // do nothing
         }
     }
-}
-*/
+}*/

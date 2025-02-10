@@ -68,20 +68,20 @@ public final class MecanumDrive {
 
         // drive model parameters
         public static final double TICKS_PER_REV = 28;
-        public static double WHEEL_RADIUS = 2.45;
+        public static double WHEEL_RADIUS = 2.45 * (96/90);
         public static double GEAR_RATIO = 20;
         public double inPerTick = WHEEL_RADIUS * 2 * Math.PI / (GEAR_RATIO * TICKS_PER_REV);
         public double lateralInPerTick = inPerTick;
-        public double trackWidthTicks = 120; //445.10592
+        public double trackWidthTicks = 120; //angular ramp logger old wheels: 445.10592 // our guss for qualifiers: 120 //angular ramp logger new wheels: 411.54694
 
         // feedforward parameters (in tick units)
-        public double kS = 1.5;//3.86059796;
-        public double kV = .0055;//0.0034877209;
-        public double kA = 0.001;// 0.0008
+        public double kS =  1.75;//angular ramp logger old wheels: 3.86059796 // our guss for qualifiers: 1.5 //angular ramp logger new wheels: 3.696829 //
+        public double kV = .007;//angular ramp logger old wheels: 0.0034877209 // our guss for qualifiers: .0055 //angular ramp logger new wheels: 0.00409646
+        public double kA = .002;//0.001;// 0.0008
 
         // path profile parameters (in inches)
-        public double maxWheelVel = 30; // 50
-        public double minProfileAccel = -30;
+        public double maxWheelVel = 45; // 50 // qualifier:30
+        public double minProfileAccel = -40; // qualifier: -30
         public double maxProfileAccel = 30; // 50 late was 5/-5
 
         // turn profile parameters (in radians)
@@ -89,9 +89,9 @@ public final class MecanumDrive {
         public double maxAngAccel = Math.PI/2;
 
         // path controller gains
-        public double axialGain = 3;//0.3;  late at night was 1
-        public double lateralGain = 3;//0.3; late at night was 1
-        public double headingGain = 40;//3.0; // shared with turn  // 6.0 late night was 20
+        public double axialGain = 4;//0.3;  late at night was 1 // qualifier: 3
+        public double lateralGain = 4;//0.3; late at night was 1 // qualifier: 4
+        public double headingGain = 25;//3.0; // shared with turn  // 6.0 late night was 20 // qualifier: 40
 
         public double axialVelGain = 0.0; // 0.3
         public double lateralVelGain = 0.0; // 0.3

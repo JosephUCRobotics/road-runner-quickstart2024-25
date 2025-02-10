@@ -8,23 +8,21 @@ import com.acmerobotics.roadrunner.PoseVelocity2d;
 import com.acmerobotics.roadrunner.Vector2d;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
-import com.qualcomm.robotcore.hardware.CRServo;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.util.ElapsedTime;
-import com.sun.tools.javac.comp.Todo;
 
 import java.util.HashMap;
 import java.util.Map;
 
 //import org.apache.commons.lang3.time.StopWatch;
 
-@TeleOp(name = "TelopQualifier", group = "A")
+@TeleOp(name = "TelopDualShoulderMotors", group = "A")
 @Config
-public class TelopPathControledArm extends LinearOpMode {
+public class TelopDualShoulderMotors extends LinearOpMode {
     MecanumDrive drive;
     boolean moveArmToDropPos = false;
     boolean moveArmToPickupPos = false;
@@ -56,7 +54,6 @@ public class TelopPathControledArm extends LinearOpMode {
     boolean lastWasJoystick = false;
     boolean clawTargetUp = true;
     boolean clawSpinLeft = false;
-    double clawWheelSpeed = 0;
     boolean clawSpinRight = false;
     boolean shoulderTargetPosSet = false;
     boolean elbowTargetPosSet = false;
@@ -70,7 +67,6 @@ public class TelopPathControledArm extends LinearOpMode {
     ElapsedTime shoulderTimer = new ElapsedTime();
     PIDController shoulderController;
     private DcMotorEx shoulder;
-    private DcMotorEx shoulderBreak;
     private DcMotorEx elbow;
     boolean posControl = false;
     boolean manualControl = false;
@@ -86,18 +82,12 @@ public class TelopPathControledArm extends LinearOpMode {
     public static double KgS = .2;
     public static double elbowWeight = .05;
     public static double KgE = .0025;
-
-    public static double angleCorrection = 1.5;
     boolean hangManualy = false;
     boolean shoulderAtTarget = false;
     boolean elbowAtTarget = false;
 
     boolean clawDown = false;
     double manualClawPos = 0;
-
-    public static double minBreakPow = .15;
-    public static double breakMultiplyer = 1.75;
-    public static double breakMultiplyerDown = .15;
     @Override
     public void runOpMode() throws InterruptedException {
         telemetry = new MultipleTelemetry(telemetry, FtcDashboard.getInstance().getTelemetry());
@@ -111,15 +101,9 @@ public class TelopPathControledArm extends LinearOpMode {
 
         shoulder = hardwareMap.get(DcMotorEx.class, "shoulder");
         //shoulder.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
-        shoulder.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+        shoulder.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         shoulder.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
         shoulder.setDirection(DcMotorSimple.Direction.FORWARD);
-
-        shoulderBreak = hardwareMap.get(DcMotorEx.class, "brake");
-        //shoulder.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
-        shoulderBreak.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
-        //shoulder.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-        shoulderBreak.setDirection(DcMotorSimple.Direction.REVERSE);
 
         elbow = hardwareMap.get(DcMotorEx.class, "elbow");
         //elbow.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
@@ -175,10 +159,11 @@ public class TelopPathControledArm extends LinearOpMode {
 
             if(gamepad2.b){
                 if(!lastLeftBumper){
-                    if (clawWheelSpeed == 1){
-                        clawWheelSpeed = -1;
+                    if (clawSpinLeft || clawSpinRight){
+                        clawSpinLeft = false;
+                        clawSpinRight = false;
                     } else {
-                        clawWheelSpeed = 1;
+                        clawSpinRight = true;
                     }
                 }
                 lastLeftBumper = true;
@@ -264,7 +249,7 @@ public class TelopPathControledArm extends LinearOpMode {
             }
             manualClawPos = gamepad2.left_trigger;
             arm.closeClaw(closeClaw);
-            arm.clawWheels(clawWheelSpeed);
+            arm.spinClaw();
 
             if (gamepad1.start){
                 headingReset = drive.pose.heading.toDouble()+Math.PI * .75;
@@ -303,7 +288,7 @@ public class TelopPathControledArm extends LinearOpMode {
                 elbowTargetPosSet = false;
                 shoulderTargetPosSet = false;
 
-                manualClawPos = .7;
+                manualClawPos = .4;
             } else if (gamepad2.y) {
                 if (!pathMoveSet){
                     moveS = arm.setMove(-shoulder.getCurrentPosition(), 2700, 1500, 3000);
@@ -462,36 +447,30 @@ public class TelopPathControledArm extends LinearOpMode {
 //                shoulderTargetPosSet = false;
 //                targetHangeClaw = true;
             } else {
-                if (manualControl) {
-                    moveArmWithPath = false;
-                    pathMoveSet = false;
-                    lastWasJoystick = true;
-                    double shoulderPos = -shoulder.getCurrentPosition();
-
-                    if (-gamepad2.right_stick_y >= 0 && shoulderPos > 3700) {
-                        arm.shoulderTarget(3700);
-                    } else if (!hangManualy) {
-                        arm.moveShoulderManually(-gamepad2.right_stick_y);
-//                    if (manualControl){
-//                        arm.moveShoulderManually(-gamepad2.right_stick_y);
-//                        arm.moveElbowManually(-gamepad2.left_stick_y);
-//                    } else {
-////                       arm.calcArmPowersWithStick();
-//                        arm.moveShoulder(-gamepad2.right_stick_y);
-//                        arm.moveElbow(-gamepad2.left_stick_y);
-//                    }
-                    }
-                    if (-gamepad2.left_stick_y >= 0 && shoulderPos > 2300 && -elbow.getCurrentPosition() > -3800) {
-                        arm.elbowTarget(-3800, 1);
-                    } else if (!hangManualy) {
-                        arm.moveElbowManually(-gamepad2.left_stick_y + (-gamepad1.right_stick_y));
-                    }
-                } else {
-                    arm.calcArmPowersWithStick();
-//                    arm.moveShoulder(-gamepad2.right_stick_y);
-//                    arm.moveElbow(-gamepad2.left_stick_y);
-                }
-
+//                moveArmWithPath = false;
+//                pathMoveSet = false;
+//                lastWasJoystick = true;
+//                double shoulderPos = -shoulder.getCurrentPosition();
+//
+//                if (-gamepad2.right_stick_y >= 0 && shoulderPos > 3700){
+//                    arm.shoulderTarget(3700);
+//                } else if (!hangManualy){
+//                    arm.moveShoulderManually(-gamepad2.right_stick_y);
+////                    if (manualControl){
+////                        arm.moveShoulderManually(-gamepad2.right_stick_y);
+////                        arm.moveElbowManually(-gamepad2.left_stick_y);
+////                    } else {
+//////                       arm.calcArmPowersWithStick();
+////                        arm.moveShoulder(-gamepad2.right_stick_y);
+////                        arm.moveElbow(-gamepad2.left_stick_y);
+////                    }
+//                }
+//                if (-gamepad2.left_stick_y >= 0 && shoulderPos > 2300 && -elbow.getCurrentPosition() > -3800) {
+//                    arm.elbowTarget( -3800, 1);
+//                } else if (!hangManualy) {
+//                    arm.moveElbowManually(-gamepad2.left_stick_y + (-gamepad1.right_stick_y));
+//                }
+                arm.calcArmPowersWithStick();
             }
 
 
@@ -506,7 +485,7 @@ public class TelopPathControledArm extends LinearOpMode {
 
             if (!cutDrivePow && !hangManualy){
                 robotXYA = calculateRobotXYA(-gamepad1.left_stick_y, -gamepad1.left_stick_x, (gamepad1.left_trigger - gamepad1.right_trigger), .7);
-                if (robotXYA[2] != 0 || Math.abs(drive.updatePoseEstimate().angVel) > 1){
+                if (robotXYA[2] != 0){
                     targetAngle = drive.pose.heading.toDouble()-headingReset;
                     drive.setDrivePowers(new PoseVelocity2d(new Vector2d(robotXYA[0], robotXYA[1]), robotXYA[2]));
                 } else {
@@ -517,11 +496,8 @@ public class TelopPathControledArm extends LinearOpMode {
                             targetAngle += 2*Math.PI;
                         }
                     }
-                    drive.setDrivePowers(new PoseVelocity2d(new Vector2d(robotXYA[0], robotXYA[1]), (targetAngle - (drive.pose.heading.toDouble()-headingReset))*angleCorrection));
+                    drive.setDrivePowers(new PoseVelocity2d(new Vector2d(robotXYA[0], robotXYA[1]), (targetAngle - (drive.pose.heading.toDouble()-headingReset))*.3));
                 }
-                telemetry.addData("Target Angle", targetAngle);
-                telemetry.addData("Angle", drive.pose.heading.toDouble());
-                telemetry.addData("Angle Vel", drive.updatePoseEstimate().angVel);
             }
             if (hangManualy){
                 shoulder.setPower(gamepad1.left_stick_y);
@@ -559,7 +535,7 @@ public class TelopPathControledArm extends LinearOpMode {
         private DcMotorEx shoulder;
         private DcMotorEx elbow;
         Servo clawClose;
-        CRServo clawWheels;
+        Servo clawSpin;
         Servo clawUp;
         public Arm(HardwareMap hardwareMap){
             shoulder = hardwareMap.get(DcMotorEx.class, "shoulder");
@@ -575,7 +551,7 @@ public class TelopPathControledArm extends LinearOpMode {
             elbow.setDirection(DcMotorSimple.Direction.FORWARD);
 
             clawClose = hardwareMap.get(Servo.class, "clawClose");
-            clawWheels = hardwareMap.get(CRServo.class, "clawWheels");
+            clawSpin = hardwareMap.get(Servo.class, "clawSpin");
             clawUp = hardwareMap.get(Servo.class, "clawUp");
         }
         public double calcCurrentTargetPos(Map<String, Double> move) {
@@ -620,39 +596,48 @@ public class TelopPathControledArm extends LinearOpMode {
 
         public void closeClaw(int close){
             if (close == 0){
-                clawClose.setPosition(0);
+                clawClose.setPosition(.45);
             } else if (close == 1){
-                    clawClose.setPosition(.5);
+                    clawClose.setPosition(.34);
             } else {
-                clawClose.setPosition(1);
+                clawClose.setPosition(.2);
             }
-        }
-        public void clawWheels(double pow){
-            clawWheels.setPower(pow);
         }
         public void targetHangPos(){
             clawUp.setPosition(.5);
+        }
+        public void spinClaw(){
+            if (clawSpinLeft) {
+                clawSpin.setPosition(0);
+            } else if (clawSpinRight) {
+                clawSpin.setPosition(1);
+            } else {
+                clawSpin.setPosition(.42);
+            }
         }
         double endArmAngle;
         double servoTarget;
         public void levelClaw(boolean flat, double pos, boolean down){
             if (pos ==0 || -elbow.getCurrentPosition() > -4144 && -elbow.getCurrentPosition() < -2619 || -shoulder.getCurrentPosition() < 3000){
                 endArmAngle = ((-shoulder.getCurrentPosition() - 1457)/8192.0 * 2*Math.PI)+ ((-elbow.getCurrentPosition() + 3344)/8192.0 * 2*Math.PI);
-                servoTarget = -endArmAngle/(Math.PI*2)*1.333;
+                servoTarget = -endArmAngle/Math.PI*.75+.04;  // +.11
                 if (-elbow.getCurrentPosition() > -4144 && -elbow.getCurrentPosition() < -2619) {
                     flat = false;
                 }
-//                if (!flat){
-//                    servoTarget+=.4;
-//                }
-//                if (down){
-//                    servoTarget = .15;
-//                }
-                if (pos != 0) {
-                    servoTarget = pos;
+                if (!flat){
+                    servoTarget+=.4;
+                }
+                if (servoTarget < .11){
+                    servoTarget = .11;
+                }
+                if (servoTarget > .69){
+                    servoTarget = .69;
+                }
+                if (down){
+                    servoTarget = .15;
                 }
             } else {
-                servoTarget = pos; //69
+                servoTarget = pos * .69; //69
             }
 //            telemetry.addData("servo target: ", servoTarget);
 //            telemetry.addData("servo current: ", clawUp.getPosition());
@@ -1299,35 +1284,29 @@ public class TelopPathControledArm extends LinearOpMode {
         /*if (pow == 0){
             pow = .00001;
         }*/
-//            double feedForeword = ((direction * shoulderCosAngle + shoulderFeedForwardOffsetK) * Math.abs(desiredVelocity)  * shoulderCosFeadForwordK) + desiredVelocity * shoulderFeadForwordK;
-//            if (vel < desiredVelocity * shoulderDownSpeed && direction < 0) {
-//                feedForeword *= shoulderFeedForwardDownCorrection;
-//            }
+            double feedForeword = ((direction * shoulderCosAngle + shoulderFeedForwardOffsetK) * Math.abs(desiredVelocity)  * shoulderCosFeadForwordK) + desiredVelocity * shoulderFeadForwordK;
+            if (vel < desiredVelocity * shoulderDownSpeed && direction < 0) {
+                feedForeword *= shoulderFeedForwardDownCorrection;
+            }
             double shoulderVelocityErrCorrection = shoulderVelocetyCorectionK * (desiredVelocity - vel);
 
             double elbowAngle = (-elbow.getCurrentPosition() + 3300)/8192.0 * 2*Math.PI;
             double elbowCosAngle = Math.cos(shoulderAngle + elbowAngle);
             double gravityCorrection = KgS * shoulderCosAngle + elbowCosAngle * elbowWeight;
 
-//            double pow = gravityCorrection + feedForeword + shoulderVelocityErrCorrection;
+            double pow = gravityCorrection + feedForeword + shoulderVelocityErrCorrection;
+
+            //double pow = shoulderController.output(-gamepad1.left_stick_y*maxVelocity, vel,-gamepad1.left_stick_y*maxVelocity);
 
 
-            double out = (KpS * error);
+            //lastPos = pos;
+            //lastTime = time;
+            //lastPow = pow;
 
-            out = Math.max(Math.min(out, 1), -1);
 
-//            double gravity = Math.cos(shoulderAngle) * GravityK + elbowGravity;
-//            out += gravity;
-            double pow = out;
 
-            double breakPow = 0;
-            if (powIn > 0) {
-                breakPow = (powIn) * breakMultiplyer + minBreakPow;
-            } else {
-                breakPow = (powIn) * breakMultiplyerDown + minBreakPow;
-            }
-
-            shoulderBreak.setPower(breakPow);
+            //pow += angleMultiplyer;
+            //pow += shoulderGravityCorection * angleMultiplyer;
 
             shoulder.setPower(pow);
             telemetry.addData("shoulder raw vel", -shoulder.getVelocity());
@@ -1338,7 +1317,7 @@ public class TelopPathControledArm extends LinearOpMode {
             telemetry.addData("shoulder angle(RAD)", shoulderAngle);
             telemetry.addData("elbow angle", elbowAngle);
             telemetry.addData("shoulder Cos(angle)", shoulderCosAngle);
-//            telemetry.addData("shoulder feedForeword", feedForeword);
+            telemetry.addData("shoulder feedForeword", feedForeword);
             telemetry.addData("shoulder shoulderVelocityErrCorrection", shoulderVelocityErrCorrection);
             telemetry.addData("shoulder gravity correction", KgS * shoulderCosAngle);
             telemetry.addData("shoulderFeedForwardDownCorrection", shoulderFeedForwardDownCorrection);

@@ -13,6 +13,7 @@ import com.acmerobotics.roadrunner.Vector2d;
 import com.acmerobotics.roadrunner.ftc.Actions;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
+import com.qualcomm.robotcore.hardware.CRServo;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
@@ -28,9 +29,10 @@ public final class AutoRungSecondBlockV2 extends LinearOpMode {
     double initialOffset = 0;
     public class Arm {
         private DcMotorEx shoulder;
+        private DcMotorEx shoulderBreak;
         private DcMotorEx elbow;
         Servo clawClose;
-        Servo clawSpin;
+        CRServo clawWheels;
         Servo clawUp;
         public double KpS = 0.002;
         public double KiS = 0.000; //.002
@@ -55,6 +57,12 @@ public final class AutoRungSecondBlockV2 extends LinearOpMode {
             shoulder.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
             shoulder.setDirection(DcMotorSimple.Direction.FORWARD);
 
+            shoulderBreak = hardwareMap.get(DcMotorEx.class, "brake");
+            //shoulder.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+            shoulderBreak.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+            //shoulder.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+            shoulderBreak.setDirection(DcMotorSimple.Direction.REVERSE);
+
 
             elbow = hardwareMap.get(DcMotorEx.class, "elbow");
             //elbow.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
@@ -63,7 +71,7 @@ public final class AutoRungSecondBlockV2 extends LinearOpMode {
             elbow.setDirection(DcMotorSimple.Direction.FORWARD);
 
             clawClose = hardwareMap.get(Servo.class, "clawClose");
-            clawSpin = hardwareMap.get(Servo.class, "clawSpin");
+            clawWheels = hardwareMap.get(CRServo.class, "clawWheels");
             clawUp = hardwareMap.get(Servo.class, "clawUp");
 
             firstSMoveToBuckets = setMove(0, 3700, 1500, 2000);
@@ -378,7 +386,6 @@ String s = "";
             @Override
             public boolean run(@NonNull TelemetryPacket packet) {
                 clawClose.setPosition(.48);
-                clawSpin.setPosition(.42);
                 clawUp.setPosition(0);
                 if (startTime == 0){
                     startTime = getRuntime();
@@ -477,7 +484,6 @@ String s = "";
             @Override
             public boolean run(@NonNull TelemetryPacket packet) {
                 clawClose.setPosition(.25);
-                clawSpin.setPosition(.42);
                 clawUp.setPosition(.4); // .5
                 if (startTime == 0){
                     startTime = getRuntime();
@@ -526,12 +532,27 @@ String s = "";
         }
         double shoulderTarget = 0;
         double elbowTarget = 0;
+        double minBreakPow = .15;
+        double breakMultiplyer = 1.75;
+        double breakMultiplyerDown = .15;
         public class upDateArmLoop implements Action{
             @Override
             public boolean run(@NonNull TelemetryPacket packet) {
-                shoulderTarget = calcCurrentTargetPos(move2);
+                Map<String, Double> shoulderPosAndVel = calcCurrentTargetPos(move2);
+                double shoulderTarget = shoulderPosAndVel.get("targetPos");
+                double shoulderTargetVel = shoulderPosAndVel.get("targetVel");
 
-                elbowTarget = calcCurrentTargetPos(moveE);
+                double breakPow = 0;
+                if (shoulderTargetVel > 0) {
+                    breakPow = (shoulderTargetVel/3000) * (1-minBreakPow)*breakMultiplyer + minBreakPow;
+                } else {
+                    breakPow = (shoulderTargetVel/3000) * (1-minBreakPow)*breakMultiplyerDown + minBreakPow;
+                }
+
+                shoulderBreak.setPower(breakPow);
+
+                Map<String, Double> elbowPosAndVel = calcCurrentTargetPos(moveE);
+                double elbowTarget = elbowPosAndVel.get("targetPos");
 
                 shoulderTarget(shoulderTarget);
                 elbowTarget(elbowTarget);
@@ -616,7 +637,7 @@ String s = "";
             // This works because this function is only run ones at the beginning of each move
             return move;
         }
-        public double calcCurrentTargetPos(Map<String, Double> move) {
+        public Map<String, Double> calcCurrentTargetPos(Map<String, Double> move) {
 
             // Set the previous, current and total move time
             double moveTime = getRuntime() - move.get("moveStartTime");
@@ -634,26 +655,35 @@ String s = "";
             }
 
             double Pmove;
+            double Vmove;
             if (Math.abs(move.get("length")) <= 2 * Math.abs(P1)) {
                 // Triangle
                 if (moveTime <= moveEndTime / 2) {
                     Pmove =  0.5 * accel * Math.pow(moveTime, 2);
+                    Vmove = accel * moveTime;
                 } else {
                     Pmove = -0.5 * accel * Math.pow(moveTime, 2) + P2 * moveTime + P3;
+                    Vmove = -accel * moveTime + P2;
                 }
             } else {
                 // Trapezoid
                 double timeA = peakVel / accel;
                 if (moveTime <= timeA) {
                     Pmove = 0.5 * accel * Math.pow(moveTime, 2);
+                    Vmove = accel * moveTime;
                 } else if (moveTime <= moveEndTime - timeA) {
                     Pmove = peakVel * moveTime + P1;
+                    Vmove = peakVel;
                 } else {
                     Pmove = -0.5 * accel * Math.pow(moveTime, 2) + P2 * moveTime + P3;
+                    Vmove = -accel * moveTime + P2;
                 }
             }
             double targetPos = move.get("startPos") + Pmove;
-            return targetPos;
+            Map<String, Double> returnThis = new HashMap<>();
+            returnThis.put("targetPos", targetPos);
+            returnThis.put("targetVel", Vmove);
+            return returnThis;
         }
     }
 
