@@ -1,6 +1,9 @@
 package org.firstinspires.ftc.teamcode;
 
+import static com.qualcomm.hardware.rev.RevHubOrientationOnRobot.xyzOrientation;
+
 import androidx.annotation.NonNull;
+import androidx.annotation.TransitionRes;
 
 import com.acmerobotics.dashboard.canvas.Canvas;
 import com.acmerobotics.dashboard.config.Config;
@@ -40,6 +43,7 @@ import com.qualcomm.robotcore.hardware.IMU;
 import com.qualcomm.robotcore.hardware.VoltageSensor;
 
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
+import org.firstinspires.ftc.robotcore.external.navigation.Orientation;
 import org.firstinspires.ftc.robotcore.external.navigation.YawPitchRollAngles;
 import org.firstinspires.ftc.teamcode.messages.DriveCommandMessage;
 import org.firstinspires.ftc.teamcode.messages.MecanumCommandMessage;
@@ -53,42 +57,57 @@ import java.util.List;
 
 @Config
 public final class MecanumDrive {
+    public boolean camErr = false;
+    public void setcamErr(boolean newcamErr) {
+        camErr = newcamErr;
+    }
+
+    public void setPose(Pose2d poseIn) {
+        pose = poseIn;
+    }
+    public Pose2d getPose() {
+        return pose;
+    }
+
     public static class Params {
         // IMU orientation
-        // TODO: fill in these values based on
+        // done: fill in these values based on
         //   see https://ftc-docs.firstinspires.org/en/latest/programming_resources/imu/imu.html?highlight=imu#physical-hub-mounting
-        public RevHubOrientationOnRobot.LogoFacingDirection logoFacingDirection =
-                RevHubOrientationOnRobot.LogoFacingDirection.UP;
-        public RevHubOrientationOnRobot.UsbFacingDirection usbFacingDirection =
-                RevHubOrientationOnRobot.UsbFacingDirection.FORWARD;
+//        public RevHubOrientationOnRobot.LogoFacingDirection logoFacingDirection =
+//                RevHubOrientationOnRobot.LogoFacingDirection.UP;
+//        public RevHubOrientationOnRobot.UsbFacingDirection usbFacingDirection =
+//                RevHubOrientationOnRobot.UsbFacingDirection.FORWARD;
 
         // drive model parameters
-        public double inPerTick = 1;
+        public static final double TICKS_PER_REV = 28;
+        public static double WHEEL_RADIUS = 2.45 * (96/90);
+        public static double GEAR_RATIO = 20;
+        public double inPerTick = WHEEL_RADIUS * 2 * Math.PI / (GEAR_RATIO * TICKS_PER_REV);
         public double lateralInPerTick = inPerTick;
-        public double trackWidthTicks = 0;
+        public double trackWidthTicks = 120; //angular ramp logger old wheels: 445.10592 // our guss for qualifiers: 120 //angular ramp logger new wheels: 411.54694
 
         // feedforward parameters (in tick units)
-        public double kS = 0;
-        public double kV = 0;
-        public double kA = 0;
+        public double kS =  1.75;//angular ramp logger old wheels: 3.86059796 // our guss for qualifiers: 1.5 //angular ramp logger new wheels: 3.696829 //
+        public double kV = .007;//angular ramp logger old wheels: 0.0034877209 // our guss for qualifiers: .0055 //angular ramp logger new wheels: 0.00409646
+        public double kA = .002;//0.001;// 0.0008
 
         // path profile parameters (in inches)
-        public double maxWheelVel = 50;
-        public double minProfileAccel = -30;
-        public double maxProfileAccel = 50;
+        public double maxWheelVel = 45; // 50 // qualifier:30
+        public double minProfileAccel = -40; // qualifier: -30
+        public double maxProfileAccel = 30; // 50 late was 5/-5
 
         // turn profile parameters (in radians)
         public double maxAngVel = Math.PI; // shared with path
-        public double maxAngAccel = Math.PI;
+        public double maxAngAccel = Math.PI/2;
 
         // path controller gains
-        public double axialGain = 0.0;
-        public double lateralGain = 0.0;
-        public double headingGain = 0.0; // shared with turn
+        public double axialGain = 4;//0.3;  late at night was 1 // qualifier: 3
+        public double lateralGain = 6;//0.3; late at night was 1 // qualifier: 4
+        public double headingGain = 25;//3.0; // shared with turn  // 6.0 late night was 20 // qualifier: 40
 
-        public double axialVelGain = 0.0;
-        public double lateralVelGain = 0.0;
-        public double headingVelGain = 0.0; // shared with turn
+        public double axialVelGain = 0.0; // 0.3
+        public double lateralVelGain = 0.0; // 0.3
+        public double headingVelGain = 1.0; // shared with turn // 1.0
     }
 
     public static Params PARAMS = new Params();
@@ -111,6 +130,7 @@ public final class MecanumDrive {
     public final VoltageSensor voltageSensor;
 
     public final LazyImu lazyImu;
+    //public IMU imu;
 
     public final Localizer localizer;
     public Pose2d pose;
@@ -140,6 +160,9 @@ public final class MecanumDrive {
 
             // TODO: reverse encoders if needed
             //   leftFront.setDirection(DcMotorSimple.Direction.REVERSE);
+            leftFront.setDirection(DcMotorSimple.Direction.REVERSE);
+            rightBack.setDirection(DcMotorSimple.Direction.REVERSE);
+            rightFront.setDirection(DcMotorSimple.Direction.REVERSE);
         }
 
         @Override
@@ -215,31 +238,52 @@ public final class MecanumDrive {
             module.setBulkCachingMode(LynxModule.BulkCachingMode.AUTO);
         }
 
-        // TODO: make sure your config has motors with these names (or change them)
+        // done: make sure your config has motors with these names (or change them)
         //   see https://ftc-docs.firstinspires.org/en/latest/hardware_and_software_configuration/configuring/index.html
-        leftFront = hardwareMap.get(DcMotorEx.class, "leftFront");
-        leftBack = hardwareMap.get(DcMotorEx.class, "leftBack");
-        rightBack = hardwareMap.get(DcMotorEx.class, "rightBack");
-        rightFront = hardwareMap.get(DcMotorEx.class, "rightFront");
+        leftFront = hardwareMap.get(DcMotorEx.class, "right");
+        leftBack = hardwareMap.get(DcMotorEx.class, "front");
+        rightBack = hardwareMap.get(DcMotorEx.class, "left");
+        rightFront = hardwareMap.get(DcMotorEx.class, "back");
 
         leftFront.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         leftBack.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         rightBack.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         rightFront.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
 
-        // TODO: reverse motor directions if needed
-        //   leftFront.setDirection(DcMotorSimple.Direction.REVERSE);
+        //TODO: this is what we added
+//        leftFront.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+//        leftBack.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+//        rightBack.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+//        rightFront.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
 
-        // TODO: make sure your config has an IMU with this name (can be BNO or BHI)
+        // TODO: reverse motor directions if needed
+        rightFront.setDirection(DcMotorSimple.Direction.REVERSE);
+        leftFront.setDirection(DcMotorSimple.Direction.REVERSE);
+//        leftBack.setDirection(DcMotorSimple.Direction.REVERSE);
+        rightBack.setDirection(DcMotorSimple.Direction.REVERSE);
+
+        // done: make sure your config has an IMU with this name (can be BNO or BHI)
         //   see https://ftc-docs.firstinspires.org/en/latest/hardware_and_software_configuration/configuring/index.html
-        lazyImu = new LazyImu(hardwareMap, "imu", new RevHubOrientationOnRobot(
-                PARAMS.logoFacingDirection, PARAMS.usbFacingDirection));
+
+        double xRotation = 90;  // enter the desired X rotation angle here.
+        double yRotation = 135;  // enter the desired Y rotation angle here.
+        double zRotation = 0;  // enter the desired Z rotation angle here.
+
+        Orientation hubRotation = xyzOrientation(xRotation, yRotation, zRotation);
+
+        // Now initialize the IMU with this mounting orientation
+        RevHubOrientationOnRobot orientationOnRobot = new RevHubOrientationOnRobot(hubRotation);
+//        imu.initialize(new IMU.Parameters(orientationOnRobot));
+
+//        lazyImu = new LazyImu(hardwareMap, "imu", new RevHubOrientationOnRobot(
+//                PARAMS.logoFacingDirection, PARAMS.usbFacingDirection));
+        lazyImu = new LazyImu(hardwareMap, "imu", orientationOnRobot);
 
         voltageSensor = hardwareMap.voltageSensor.iterator().next();
 
         localizer = new DriveLocalizer();
 
-        FlightRecorder.write("MECANUM_PARAMS", PARAMS);
+//        FlightRecorder.write("MECANUM_PARAMS", PARAMS);
     }
 
     public void setDrivePowers(PoseVelocity2d powers) {
@@ -288,19 +332,28 @@ public final class MecanumDrive {
                 t = Actions.now() - beginTs;
             }
 
-            if (t >= timeTrajectory.duration) {
+            Pose2dDual<Time> txWorldTarget = timeTrajectory.get(t);             //  +
+            targetPoseWriter.write(new PoseMessage(txWorldTarget.value()));     //  +
+                                                                                //  +
+            PoseVelocity2d robotVelRobot = updatePoseEstimate();                //  +
+
+            Pose2d error = txWorldTarget.value().minusExp(pose);                //  +
+
+            if (t >= timeTrajectory.duration && error.position.norm() < .5
+                    && robotVelRobot.linearVel.norm() < 0.5 && camErr) {
                 leftFront.setPower(0);
                 leftBack.setPower(0);
                 rightBack.setPower(0);
                 rightFront.setPower(0);
+                camErr = false;
 
                 return false;
             }
 
-            Pose2dDual<Time> txWorldTarget = timeTrajectory.get(t);
-            targetPoseWriter.write(new PoseMessage(txWorldTarget.value()));
-
-            PoseVelocity2d robotVelRobot = updatePoseEstimate();
+//            Pose2dDual<Time> txWorldTarget = timeTrajectory.get(t);             // -
+//            targetPoseWriter.write(new PoseMessage(txWorldTarget.value()));     // -
+//            // -
+//            PoseVelocity2d robotVelRobot = updatePoseEstimate();                // -
 
             PoseVelocity2dDual<Time> command = new HolonomicController(
                     PARAMS.axialGain, PARAMS.lateralGain, PARAMS.headingGain,
@@ -331,7 +384,7 @@ public final class MecanumDrive {
             p.put("y", pose.position.y);
             p.put("heading (deg)", Math.toDegrees(pose.heading.toDouble()));
 
-            Pose2d error = txWorldTarget.value().minusExp(pose);
+//            Pose2d error = txWorldTarget.value().minusExp(pose);              //  -
             p.put("xError", error.position.x);
             p.put("yError", error.position.y);
             p.put("headingError (deg)", Math.toDegrees(error.heading.toDouble()));
