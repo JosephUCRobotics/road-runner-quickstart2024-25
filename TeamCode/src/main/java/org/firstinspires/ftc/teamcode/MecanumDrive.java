@@ -127,6 +127,7 @@ public final class MecanumDrive {
         private int lastLeftFrontPos, lastLeftBackPos, lastRightBackPos, lastRightFrontPos;
         private Rotation2d lastHeading;
         private boolean initialized;
+        // Todo: Chanded form:         private Pose2d pose;
         private Pose2d pose;
 
         public DriveLocalizer(Pose2d pose) {
@@ -295,6 +296,10 @@ public final class MecanumDrive {
             } else {
                 t = Actions.now() - beginTs;
             }
+
+            // Todo: get the tragectory to stop when the cam is ready
+//            && error.position.norm() < .5
+//                    && robotVelRobot.linearVel.norm() < 0.5 && camErr) {
 
             if (t >= timeTrajectory.duration) {
                 leftFront.setPower(0);
