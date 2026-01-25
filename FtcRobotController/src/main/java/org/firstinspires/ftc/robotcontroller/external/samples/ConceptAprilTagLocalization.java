@@ -65,7 +65,7 @@ import java.util.List;
  * Remove or comment out the @Disabled line to add this OpMode to the Driver Station OpMode list.
  */
 @TeleOp(name = "Concept: AprilTag Localization", group = "Concept")
-@Disabled
+//@Disabled
 public class ConceptAprilTagLocalization extends LinearOpMode {
 
     private static final boolean USE_WEBCAM = true;  // true for webcam, false for phone camera
@@ -87,7 +87,7 @@ public class ConceptAprilTagLocalization extends LinearOpMode {
      * robot. Suppose your camera is positioned 5 inches to the left, 7 inches forward, and 12
      * inches above the ground - you would need to set the position to (-5, 7, 12).
      *
-     * Orientation:
+     * Orientation: -7.25, 2.5
      * If all values are zero (no rotation), that implies the camera is pointing straight up. In
      * most cases, you'll need to set the pitch to -90 degrees (rotation about the x-axis), meaning
      * the camera is horizontal. Use a yaw of 0 if the camera is pointing forwards, +90 degrees if
@@ -95,9 +95,10 @@ public class ConceptAprilTagLocalization extends LinearOpMode {
      * to +/-90 degrees if it's vertical, or 180 degrees if it's upside-down.
      */
     private Position cameraPosition = new Position(DistanceUnit.INCH,
-            0, 0, 0, 0);
+3,12,15.25,0);
+//            -2.5, -7.25, 15.75, 0);
     private YawPitchRollAngles cameraOrientation = new YawPitchRollAngles(AngleUnit.DEGREES,
-            0, -90, 0, 0);
+            0, -103, 180, 0);
 
     /**
      * The variable to store our instance of the AprilTag processor.
@@ -182,7 +183,7 @@ public class ConceptAprilTagLocalization extends LinearOpMode {
 
         // Set the camera (webcam vs. built-in RC phone camera).
         if (USE_WEBCAM) {
-            builder.setCamera(hardwareMap.get(WebcamName.class, "Webcam 1"));
+            builder.setCamera(hardwareMap.get(WebcamName.class, "Webcam 2"));
         } else {
             builder.setCamera(BuiltinCameraDirection.BACK);
         }

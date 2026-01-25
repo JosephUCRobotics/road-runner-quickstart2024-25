@@ -128,7 +128,7 @@ public class MainVision {
 
         // Set and enable the processor.
         builder.addProcessor(CameraVariables.aprilTag2);
-        builder.addProcessor(cameraReader);
+//        builder.addProcessor(cameraReader);
 
         // Build the Vision Portal, using the above settings.
         builder.setLiveViewContainerId(Portal_1_View_ID);
@@ -154,7 +154,7 @@ public class MainVision {
 
         // Set and enable the processor.
         builder2.addProcessor(CameraVariables.aprilTag);
-        builder2.addProcessor(cameraReader2);
+//        builder2.addProcessor(cameraReader2);
 
         // Build the Vision Portal, using the above settings.
         builder2.setLiveViewContainerId(Portal_2_View_ID);
@@ -219,6 +219,9 @@ public class MainVision {
         output.add(ay);
         output.add(thetaA);
         return output;
+    }
+    public static int getAprilTagId(AprilTagDetection detection) {
+        return detection.id;
     }
     public static Vector<Double> getRobotPosFromCameraStream(double thetaCF, double by, double bx) {
         //
