@@ -5,10 +5,10 @@ import com.acmerobotics.dashboard.config.Config;
 @Config
 
 public class DashboardVariables {
-    public static int x = 225;
-    public static int y = 0;
-    public static int width = 255;
-    public static int height = 200;
+    public static int x = 52;
+    public static int y = 60;
+    public static int width = 50;
+    public static int height = 60;
     public static int x2 = 225;
     public static int y2 = 300;
     public static int width2 = 255;

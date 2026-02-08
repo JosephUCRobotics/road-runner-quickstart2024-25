@@ -25,12 +25,15 @@ public class shooterTuner extends LinearOpMode {
 
     public static double shooterTuner_topShootVelocity = 1400;
     public static double shooterTuner_mainShootVelocity = 1300;
-    public static double shooterTuner_topP = 0.0015;
-    public static double shooterTuner_topI = 0;
-    public static double shooterTuner_topD = 0.000027;
+    public static double shooterTuner_topP = 0.001;
+    public static double shooterTuner_topI = 0.00001;
+    public static double shooterTuner_topD = 0.00001;
+    public static double shooterTuner_topF = 0.00042;
+
     public static double shooterTuner_mainP = 0.006;
     public static double shooterTuner_mainI = 0;
     public static double shooterTuner_mainD = 0.00005;
+    public static double shooterTuner_mainF = 0.0001;
     public static double shooterTuner_trayP = 0.0003;
     public static double shooterTuner_trayI = 0;
     public static double shooterTuner_trayD = 0.0000082;
@@ -47,8 +50,8 @@ public class shooterTuner extends LinearOpMode {
         intake = hardwareMap.get(DcMotor.class, "intake");
 
         // Put initialization blocks here.
-        intake.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
-        intake.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+//        intake.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+//        intake.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         shoot_top.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         shoot_main.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         shoot_main.setDirection(DcMotor.Direction.REVERSE);
@@ -69,8 +72,8 @@ public class shooterTuner extends LinearOpMode {
 //                double shootersVelocity = 7 * distanceFromGoal + 1300;
 
 //                double shootersPower = shootersVelocity/2650+shootController.update(shootersVelocity, ((DcMotorEx) shoot_l).getVelocity());
-                double topShootPower = shooterTuner_topShootVelocity/2650+topShootController.update(shooterTuner_topShootVelocity, ((DcMotorEx) shoot_top).getVelocity());
-                double mainShootPower = shooterTuner_mainShootVelocity/2650+mainShootController.update(shooterTuner_mainShootVelocity, ((DcMotorEx) shoot_main).getVelocity());
+                double topShootPower = shooterTuner_topShootVelocity*shooterTuner_topF+topShootController.update(shooterTuner_topShootVelocity, ((DcMotorEx) shoot_top).getVelocity());
+                double mainShootPower = shooterTuner_mainShootVelocity*shooterTuner_mainF+mainShootController.update(shooterTuner_mainShootVelocity, ((DcMotorEx) shoot_main).getVelocity());
 
 
 
@@ -79,6 +82,12 @@ public class shooterTuner extends LinearOpMode {
                 } else {
                     shoot_top.setPower(0);
                     topShootController.resetTimer();
+                }
+
+                if (gamepad1.x) {
+                    intake.setPower(1);
+                } else {
+                    intake.setPower(0);
                 }
 
                 if (gamepad1.b) {
@@ -92,7 +101,7 @@ public class shooterTuner extends LinearOpMode {
                     tray_target += 2731;
                     servoController.resetTimer();
                 } else if (gamepad1.rightBumperWasPressed()) {
-                    tray_target += 2731;
+                    tray_target -= 2731;
                     servoController.resetTimer();
                 }
                 double tray_pow = servoController.update(tray_target, intake.getCurrentPosition());

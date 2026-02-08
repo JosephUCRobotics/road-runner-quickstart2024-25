@@ -23,7 +23,7 @@ public class TwoCamTest extends LinearOpMode
         while (opModeIsActive()) {
             camLibrary.trayProcessor.setSaveMat(gamepad1.y, "test_");
             telemetry.addData("Number of tags in Camera 1", camLibrary.aprilTagProcessor.getDetections().size());
-            telemetry.addData("Number of tags in Camera 2", camLibrary.aprilTagProcessor2.getDetections().size());
+//            telemetry.addData("Number of tags in Camera 2", camLibrary.aprilTagProcessor2.getDetections().size());
             telemetry.addData("", "");
             int[] zoneColors = camLibrary.trayProcessor.getBallColors();
             telemetry.addData("Zone 1", zoneColors[0]);
