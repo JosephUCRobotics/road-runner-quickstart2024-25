@@ -21,12 +21,13 @@ import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
 import org.openftc.apriltag.AprilTagDetection;
+import org.openftc.apriltag.AprilTagPose;
 
 import java.util.List;
 import java.util.Objects;
 
-@Autonomous(name = "AutoBlueState", group = "A")
-public final class AutoBlueState extends LinearOpMode {
+@Autonomous(name = "AutoBlueStateCorner", group = "A")
+public final class AutoBlueStateCorner extends LinearOpMode {
 
     MecanumDrive drive;
     private ElapsedTime shootTime = new ElapsedTime();
@@ -108,40 +109,43 @@ public final class AutoBlueState extends LinearOpMode {
         TrajectoryActionBuilder driveToShoot = drive.actionBuilder(initialPose)
                 .setTangent(0)
 //                .splineToSplineHeading(new Pose2d(-55, 14, Math.PI*.66), 0);
-                .splineToConstantHeading(new Vector2d(-55, 14), 0)
+                .splineToConstantHeading(new Vector2d(-53, 16), 0)
                 .turnTo(Math.PI*.66);
-//        TrajectoryActionBuilder driveToPickup = drive.actionBuilder(new Pose2d(-60, 14, Math.PI*.66))
-//                .turnTo(Math.PI*.65)
-//                .setTangent(Math.PI*.5)
-//                .splineToConstantHeading(new Vector2d(-58, 60), Math.PI*.8)
-//                .splineToSplineHeading(new Pose2d(-66,66,Math.PI*.5),0)
-//                .setTangent(Math.PI*-.4)
-//                .splineToConstantHeading(new Vector2d(-60, 14), Math.PI*-.5)
-//                .turnTo(Math.PI*.66);
-        TrajectoryActionBuilder driveToPickup2 = drive.actionBuilder(new Pose2d(-55, 14, Math.PI*.66))
+        TrajectoryActionBuilder driveToPickup = drive.actionBuilder(new Pose2d(-53, 16, Math.PI*.66))
+                .turnTo(Math.PI*.60)
+                .setTangent(Math.PI*.5)
+                .splineToConstantHeading(new Vector2d(-58, 64), Math.PI*.5)
+                .setTangent(Math.PI*-.5)
+                .splineToSplineHeading(new Pose2d(-60,58, Math.PI*.55),-Math.PI*.6)
+                .setTangent(Math.PI*.6)
+                .splineToConstantHeading(new Vector2d(-62, 64), Math.PI*.5)
+                .setTangent(Math.PI*-.4)
+                .splineToConstantHeading(new Vector2d(-53, 16), Math.PI*-.5)
+                .turnTo(Math.PI*.66);
+        TrajectoryActionBuilder driveToPickup2 = drive.actionBuilder(new Pose2d(-53, 16, Math.PI*.66))
                 .setTangent(0)
-                .splineToSplineHeading(new Pose2d(-40,12,Math.PI*.5),0)
-                .splineToConstantHeading(new Vector2d(-36, 55), Math.PI*.5)
+                .splineToSplineHeading(new Pose2d(-41,12,Math.PI*.5),0)
+                .splineToConstantHeading(new Vector2d(-37, 55), Math.PI*.5)
                 .setTangent(Math.PI*-.6)
-                .splineToSplineHeading(new Pose2d(-57, 14, Math.PI*.62), Math.PI*-.5);
-        TrajectoryActionBuilder driveToPickup3 = drive.actionBuilder(new Pose2d(-55, 14, Math.PI*.62))
+                .splineToSplineHeading(new Pose2d(-53, 16, Math.PI*.62), Math.PI*-.5);
+        TrajectoryActionBuilder driveToPickup3 = drive.actionBuilder(new Pose2d(-53, 16, Math.PI*.62))
                 .setTangent(0)
                 .splineToSplineHeading(new Pose2d(-16,12,Math.PI*.5),0)
                 .splineToConstantHeading(new Vector2d(-12, 55), Math.PI*.5)
                 .setTangent(Math.PI*-.75)
-                .splineToSplineHeading(new Pose2d(-57, 14, Math.PI*.64), Math.PI*-.5);
+                .splineToSplineHeading(new Pose2d(-55, 16, Math.PI*.64), Math.PI*-.5);
 //                .setTangent(Math.PI*.0)
 //                .splineToSplineHeading(new Pose2d(45, 40, Math.PI*.25), Math.PI*0);
 
 //        TrajectoryActionBuilder holdShootPos = drive.actionBuilder(new Pose2d(12, 12, Math.PI*-.75000001))
 //                .turnTo(Math.PI*-.75);
 
-        TrajectoryActionBuilder driveToPark = drive.actionBuilder(new Pose2d(-57, 14, Math.PI*.64))
+        TrajectoryActionBuilder driveToPark = drive.actionBuilder(new Pose2d(-55, 16, Math.PI*.64))
                 .setTangent(0)
-                .splineToConstantHeading(new Vector2d(-36, 18), Math.PI*.75);
+                .splineToConstantHeading(new Vector2d(-36, 20), Math.PI*.75);
 
         Action driveToShootAction = driveToShoot.build();
-//        Action driveToPickupAction = driveToPickup.build();
+        Action driveToPickupAction = driveToPickup.build();
         Action driveToPickup2Action = driveToPickup2.build();
         Action driveToPickup3Action = driveToPickup3.build();
 //        Action holdShootPosAction = holdShootPos.build();
@@ -204,11 +208,11 @@ public final class AutoBlueState extends LinearOpMode {
                                 ),
                                 actions.Shoot(),
                                 actions.turnOnIntake(),
-                                driveToPickup2Action,
+                                driveToPickupAction,
                                 actions.updateBallPositions(),
                                 actions.startShooter(),
                                 actions.Shoot(),
-                                driveToPickup3Action,
+                                driveToPickup2Action,
                                 actions.updateBallPositions(),
                                 actions.startShooter(),
                                 actions.Shoot(),
@@ -309,7 +313,7 @@ public final class AutoBlueState extends LinearOpMode {
                 @Override
                 public boolean run(@NonNull TelemetryPacket packet) {
                     PoseStorage.currentPose = drive.localizer.getPose();
-//                    ballColors = camLibrary.trayPipeline.getBallColors();
+                    ballColors = camLibrary.trayPipeline.getBallColors();
 
                     if (ballColors[0] == 0 || ballColors[1] == 0 || ballColors[2] == 0) {
                         pickUpTimer.reset();
@@ -421,6 +425,10 @@ public final class AutoBlueState extends LinearOpMode {
             };
         }
 
+        double convertApriltagPosToFlatDistance(AprilTagPose pose) {
+            return Math.sqrt(Math.pow(     Math.sqrt(Math.pow(pose.x*39.37,2)+Math.pow(pose.y*39.37,2)+Math.pow(pose.z*39.37,2))    ,2)-Math.pow(16.25,2));
+        }
+
         int spinCount = 0;
         public Action Shoot() {
             return new Action() {
@@ -444,22 +452,27 @@ public final class AutoBlueState extends LinearOpMode {
                     if (camTimer.milliseconds() <= 250){
                         for (AprilTagDetection detection : camLibrary.aprilTagDetectionPipeline.getLatestDetections()) {
                             if (detection.id == 20 || detection.id == 24) {
-//                            turnError = Math.toRadians(-detection.bearing);
+                                double distanceToTag = convertApriltagPosToFlatDistance(detection.pose);
+                                double angleToTag = Math.atan2(detection.pose.x*39.37,distanceToTag);
+                            turnError = -angleToTag+Math.toRadians(3);
                             }
                         }
                     }
 
-//                    double turnPower = shootLineUpController.update(turnError, 0);
-//                    front_l.setPower(turnPower * -.7);
-//                    back_l.setPower(turnPower * -.7);
-//                    front_r.setPower(-turnPower * -.7);
-//                    back_r.setPower(-turnPower * -.7);
+                    telemetry.addData("turnError", turnError);
+                    telemetry.update();
+
+                    double turnPower = shootLineUpController.update(turnError, 0);
+                    front_l.setPower(turnPower * -.7);
+                    back_l.setPower(turnPower * -.7);
+                    front_r.setPower(-turnPower * -.7);
+                    back_r.setPower(-turnPower * -.7);
 //
                     if (shooting && spinCount >= 6) {
-//                        front_l.setPower(0);
-//                        back_l.setPower(0);
-//                        front_r.setPower(0);
-//                        back_r.setPower(0);
+                        front_l.setPower(0);
+                        back_l.setPower(0);
+                        front_r.setPower(0);
+                        back_r.setPower(0);
                         drive.extraCorrection = false;
                         topShootTarget = 0;
                         mainShootTarget = 0;

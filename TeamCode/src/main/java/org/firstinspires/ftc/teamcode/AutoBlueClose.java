@@ -21,12 +21,13 @@ import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
 import org.openftc.apriltag.AprilTagDetection;
+import org.openftc.apriltag.AprilTagPose;
 
 import java.util.List;
 import java.util.Objects;
 
-@Autonomous(name = "AutoBlueState", group = "A")
-public final class AutoBlueState extends LinearOpMode {
+@Autonomous(name = "AutoBlueStateClose", group = "A")
+public final class AutoBlueClose extends LinearOpMode {
 
     MecanumDrive drive;
     private ElapsedTime shootTime = new ElapsedTime();
@@ -63,6 +64,7 @@ public final class AutoBlueState extends LinearOpMode {
     double topShootPower = 0;
     double mainShootPower = 0;
     boolean shooting = false;
+
     @Override
     public void runOpMode() throws InterruptedException {
         camTimer.reset();
@@ -100,50 +102,54 @@ public final class AutoBlueState extends LinearOpMode {
 
 
 //        Pose2d initialPose = new Pose2d(50, 52, -Math.PI/180 * 36);
-        Pose2d initialPose = new Pose2d(-63, 14, Math.PI*.5);
+        Pose2d initialPose = new Pose2d(50, 55, Math.PI/180 * 54);
 
 
         drive = new MecanumDrive(hardwareMap, initialPose);
 
-        TrajectoryActionBuilder driveToShoot = drive.actionBuilder(initialPose)
-                .setTangent(0)
-//                .splineToSplineHeading(new Pose2d(-55, 14, Math.PI*.66), 0);
-                .splineToConstantHeading(new Vector2d(-55, 14), 0)
-                .turnTo(Math.PI*.66);
-//        TrajectoryActionBuilder driveToPickup = drive.actionBuilder(new Pose2d(-60, 14, Math.PI*.66))
-//                .turnTo(Math.PI*.65)
-//                .setTangent(Math.PI*.5)
-//                .splineToConstantHeading(new Vector2d(-58, 60), Math.PI*.8)
-//                .splineToSplineHeading(new Pose2d(-66,66,Math.PI*.5),0)
-//                .setTangent(Math.PI*-.4)
-//                .splineToConstantHeading(new Vector2d(-60, 14), Math.PI*-.5)
-//                .turnTo(Math.PI*.66);
-        TrajectoryActionBuilder driveToPickup2 = drive.actionBuilder(new Pose2d(-55, 14, Math.PI*.66))
-                .setTangent(0)
-                .splineToSplineHeading(new Pose2d(-40,12,Math.PI*.5),0)
-                .splineToConstantHeading(new Vector2d(-36, 55), Math.PI*.5)
-                .setTangent(Math.PI*-.6)
-                .splineToSplineHeading(new Pose2d(-57, 14, Math.PI*.62), Math.PI*-.5);
-        TrajectoryActionBuilder driveToPickup3 = drive.actionBuilder(new Pose2d(-55, 14, Math.PI*.62))
-                .setTangent(0)
-                .splineToSplineHeading(new Pose2d(-16,12,Math.PI*.5),0)
-                .splineToConstantHeading(new Vector2d(-12, 55), Math.PI*.5)
+        TrajectoryActionBuilder driveToTag = drive.actionBuilder(initialPose)
+                .setTangent(Math.PI *-.75)
+                .splineToSplineHeading(new Pose2d(8, 16, Math.PI*.4), Math.PI *-.75);
+        TrajectoryActionBuilder driveToShoot = drive.actionBuilder(new Pose2d(8, 16, Math.PI*.4))
+                .turnTo(Math.PI*.75);
+        TrajectoryActionBuilder driveToPickup = drive.actionBuilder(new Pose2d(8, 16, Math.PI*.75))
+                .turnTo(Math.PI*.5)
+                .setTangent(Math.PI*.25)
+                .splineToConstantHeading(new Vector2d(12, 24), Math.PI*.5)
+                .splineToConstantHeading(new Vector2d(12, 55), Math.PI*.5)
+                .setTangent(Math.PI*-.5)
+                .splineToSplineHeading(new Pose2d(8, 16, Math.PI*.75), Math.PI*-.5);
+        TrajectoryActionBuilder driveToPickupWithGate = drive.actionBuilder(new Pose2d(8, 16, Math.PI*.75))
+                .turnTo(Math.PI*.5)
+                .setTangent(Math.PI*.25)
+                .splineToConstantHeading(new Vector2d(12, 24), Math.PI*.5)
+                .splineToConstantHeading(new Vector2d(12, 55), Math.PI*.5)
                 .setTangent(Math.PI*-.75)
-                .splineToSplineHeading(new Pose2d(-57, 14, Math.PI*.64), Math.PI*-.5);
-//                .setTangent(Math.PI*.0)
-//                .splineToSplineHeading(new Pose2d(45, 40, Math.PI*.25), Math.PI*0);
+                .splineToConstantHeading(new Vector2d(3, 59), Math.PI*.5)
+                .waitSeconds(1.5)
+                .setTangent(Math.PI*-.5)
+                .splineToSplineHeading(new Pose2d(8, 16, Math.PI*.75), Math.PI*-.5);
+        TrajectoryActionBuilder driveToPickup2 = drive.actionBuilder(new Pose2d(8, 16, Math.PI*.75))
+                .turnTo(Math.PI*.5)
+                .setTangent(Math.PI*.75)
+                .splineToConstantHeading(new Vector2d(-14, 24), Math.PI*.5)
+                .splineToConstantHeading(new Vector2d(-14, 55), Math.PI*.5)
+                .setTangent(Math.PI*-.5)
+                .splineToSplineHeading(new Pose2d(8, 16, Math.PI*.75), Math.PI*-.5);
 
 //        TrajectoryActionBuilder holdShootPos = drive.actionBuilder(new Pose2d(12, 12, Math.PI*-.75000001))
 //                .turnTo(Math.PI*-.75);
 
-        TrajectoryActionBuilder driveToPark = drive.actionBuilder(new Pose2d(-57, 14, Math.PI*.64))
-                .setTangent(0)
-                .splineToConstantHeading(new Vector2d(-36, 18), Math.PI*.75);
+        TrajectoryActionBuilder driveToPark = drive.actionBuilder(new Pose2d(8, 16, Math.PI*.76))
+                .setTangent(Math.PI*.5)
+                .splineToConstantHeading(new Vector2d(6, 36), Math.PI*.75);
 
         Action driveToShootAction = driveToShoot.build();
-//        Action driveToPickupAction = driveToPickup.build();
+        Action driveToTagAction = driveToTag.build();
+        Action driveToPickupAction = driveToPickup.build();
+        Action gateDriveToPickupAction = driveToPickupWithGate.build();
         Action driveToPickup2Action = driveToPickup2.build();
-        Action driveToPickup3Action = driveToPickup3.build();
+//        Action driveToPickup3Action = driveToPickup3.build();
 //        Action holdShootPosAction = holdShootPos.build();
         Action driveToParkAction = driveToPark.build();
 
@@ -198,17 +204,19 @@ public final class AutoBlueState extends LinearOpMode {
                 new ParallelAction(
                         actions.updateTray(),
                         new SequentialAction(
+                                driveToTagAction,
+                                actions.GetTagId(),
                                 new ParallelAction(
                                         actions.startShooter(),
                                         driveToShootAction
                                 ),
                                 actions.Shoot(),
                                 actions.turnOnIntake(),
-                                driveToPickup2Action,
+                                gateDriveToPickupAction,
                                 actions.updateBallPositions(),
                                 actions.startShooter(),
                                 actions.Shoot(),
-                                driveToPickup3Action,
+                                driveToPickup2Action,
                                 actions.updateBallPositions(),
                                 actions.startShooter(),
                                 actions.Shoot(),
@@ -309,7 +317,7 @@ public final class AutoBlueState extends LinearOpMode {
                 @Override
                 public boolean run(@NonNull TelemetryPacket packet) {
                     PoseStorage.currentPose = drive.localizer.getPose();
-//                    ballColors = camLibrary.trayPipeline.getBallColors();
+                    ballColors = camLibrary.trayPipeline.getBallColors();
 
                     if (ballColors[0] == 0 || ballColors[1] == 0 || ballColors[2] == 0) {
                         pickUpTimer.reset();
@@ -411,8 +419,8 @@ public final class AutoBlueState extends LinearOpMode {
                         trayController.setAutoSortTo(false);
                         startShootTime.reset();
                         trayController.spinToShootReady();
-                        topShootTarget = 1400;
-                        mainShootTarget = 1170;
+                        topShootTarget = 1100;
+                        mainShootTarget = 1160;
                         return false;
                     } else {
                         return true;
@@ -421,13 +429,17 @@ public final class AutoBlueState extends LinearOpMode {
             };
         }
 
+        double convertApriltagPosToFlatDistance(AprilTagPose pose) {
+            return Math.sqrt(Math.pow(     Math.sqrt(Math.pow(pose.x*39.37,2)+Math.pow(pose.y*39.37,2)+Math.pow(pose.z*39.37,2))    ,2)-Math.pow(16.25,2));
+        }
+
         int spinCount = 0;
         public Action Shoot() {
             return new Action() {
 
                 @Override
                 public boolean run(@NonNull TelemetryPacket packet) {
-                    if (!shooting && startShootTime.milliseconds() > 700) {
+                    if (!shooting && startShootTime.milliseconds() > 800) {
                         shootTime.reset();
                         spinCount = 0;
                         shooting = true;
@@ -440,20 +452,28 @@ public final class AutoBlueState extends LinearOpMode {
                     if (camLibrary.aprilTagDetectionPipeline.getDetectionsUpdate() != null) {
                         camTimer.reset();
                     }
+                    if (camLibrary.aprilTagDetectionPipeline.getDetectionsUpdate() != null) {
+                        camTimer.reset();
+                    }
                     double turnError = 0;
                     if (camTimer.milliseconds() <= 250){
                         for (AprilTagDetection detection : camLibrary.aprilTagDetectionPipeline.getLatestDetections()) {
                             if (detection.id == 20 || detection.id == 24) {
-//                            turnError = Math.toRadians(-detection.bearing);
+                                double distanceToTag = convertApriltagPosToFlatDistance(detection.pose);
+                                double angleToTag = Math.atan2(detection.pose.x*39.37,distanceToTag);
+                                turnError = -angleToTag;
                             }
                         }
                     }
 
-//                    double turnPower = shootLineUpController.update(turnError, 0);
-//                    front_l.setPower(turnPower * -.7);
-//                    back_l.setPower(turnPower * -.7);
-//                    front_r.setPower(-turnPower * -.7);
-//                    back_r.setPower(-turnPower * -.7);
+                    telemetry.addData("turnError", turnError);
+                    telemetry.update();
+
+                    double turnPower = shootLineUpController.update(turnError, 0);
+                    front_l.setPower(turnPower * -.7);
+                    back_l.setPower(turnPower * -.7);
+                    front_r.setPower(-turnPower * -.7);
+                    back_r.setPower(-turnPower * -.7);
 //
                     if (shooting && spinCount >= 6) {
 //                        front_l.setPower(0);
@@ -474,47 +494,34 @@ public final class AutoBlueState extends LinearOpMode {
                 }
             };
         }
-//        public Action GetTagId() {
-//            return new Action() {
-//
-//                @Override
-//                public boolean run(@NonNull TelemetryPacket packet) {
-//
-//                    List<AprilTagDetection> currentDetections = aprilTag.getDetections();
-//
-//                    // Step through the list of detections and display info for each one.
-//                    for (AprilTagDetection detection : currentDetections) {
-//                            if (detection.ftcPose.yaw > 0) {
-//                                int tagId = detection.id;
-//                                if (tagId == 21){
-//                                    trayController.setCode("GPP");
-//                                    pattern = "GPP";
-////                                    ballPattern = new int[]{1, 2, 3};
-//                                } else if (tagId == 22){
-//                                    trayController.setCode("PGP");
-//                                    pattern = "PGP";
-////                                    ballPattern = new int[]{3, 1, 2};
-//                                } else {
-////                                    ballPattern = new int[]{3, 2, 1};
-//                                    trayController.setCode("PPG");
-//                                    pattern = "PPG";
-//                                }
-//                            }
-//                    }   // end for() loop
-//                    telemetry.addData("x",drive.localizer.getPose().position.x);
-//                    telemetry.addData("y",drive.localizer.getPose().position.y);
-//                    telemetry.addData("ball code", pattern);
-////                    telemetry.addData("test",ballPattern[0]+", "+ballPattern[1]+", "+ballPattern[2]);
-//                    telemetry.update();
-//                    if (true) {
-//                        visionPortal.close();
-//                        return false;
-//                    } else {
-//                        return true;
-//                    }
-//                }
-//            };
-//        }
+        public Action GetTagId() {
+            return new Action() {
+
+                @Override
+                public boolean run(@NonNull TelemetryPacket packet) {
+                    List<AprilTagDetection> currentDetections = camLibrary.aprilTagDetectionPipeline.getLatestDetections();
+
+                    // Step through the list of detections and display info for each one.
+                    for (AprilTagDetection detection : currentDetections) {
+                            int tagId = detection.id;
+                            if (tagId == 21){
+                                trayController.setCode("GPP");
+                                pattern = "GPP";
+//                                    ballPattern = new int[]{1, 2, 3};
+                            } else if (tagId == 22){
+                                trayController.setCode("PGP");
+                                pattern = "PGP";
+//                                    ballPattern = new int[]{3, 1, 2};
+                            } else {
+//                                    ballPattern = new int[]{3, 2, 1};
+                                trayController.setCode("PPG");
+                                pattern = "PPG";
+                            }
+                    }
+                    return false;
+                }
+            };
+        }
     }
 }
 

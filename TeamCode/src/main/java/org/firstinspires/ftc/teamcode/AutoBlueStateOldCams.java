@@ -13,6 +13,7 @@ import com.acmerobotics.roadrunner.TrajectoryActionBuilder;
 import com.acmerobotics.roadrunner.Vector2d;
 import com.acmerobotics.roadrunner.ftc.Actions;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.hardware.CRServo;
 import com.qualcomm.robotcore.hardware.DcMotor;
@@ -20,20 +21,21 @@ import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
-import org.openftc.apriltag.AprilTagDetection;
+import org.firstinspires.ftc.vision.apriltag.AprilTagDetection;
 
 import java.util.List;
 import java.util.Objects;
 
-@Autonomous(name = "AutoBlueState", group = "A")
-public final class AutoBlueState extends LinearOpMode {
+
+@Disabled
+@Autonomous(name = "AutoBlueStateOldCams", group = "A")
+public final class AutoBlueStateOldCams extends LinearOpMode {
 
     MecanumDrive drive;
     private ElapsedTime shootTime = new ElapsedTime();
     private ElapsedTime startShootTime = new ElapsedTime();
     private ElapsedTime pickUpTimer = new ElapsedTime();
     private ElapsedTime startTime = new ElapsedTime();
-    private ElapsedTime camTimer = new ElapsedTime();
 
     int ballNumber = 0;
     private DcMotor shoot_l;
@@ -53,7 +55,7 @@ public final class AutoBlueState extends LinearOpMode {
     TrayController trayController;
     PIDController shootController;
     PIDController shootLineUpController;
-    PipelineLibrary camLibrary;
+    TwoCamLibrary camLibrary;
     int topShootTarget = 0;
     int mainShootTarget = 0;
 
@@ -65,16 +67,15 @@ public final class AutoBlueState extends LinearOpMode {
     boolean shooting = false;
     @Override
     public void runOpMode() throws InterruptedException {
-        camTimer.reset();
 
-        camLibrary = new PipelineLibrary(hardwareMap);
+        camLibrary = new TwoCamLibrary(hardwareMap);
 
         trayController = new TrayController(hardwareMap);
         trayController.setAutoSortTo(false);
         trayController.resetTrayPosition();
         trayController.setZoneColors(new int[]{1, 1, 2, 0, 0});
 
-        topShootController = new PIDController(0.0009, 0.00008, 0.0000);
+        topShootController = new PIDController(0.001, 0.00008, 0.0000);
         mainShootController = new PIDController(0.006, 0.0000, 0.00008);
 
 
@@ -155,7 +156,7 @@ public final class AutoBlueState extends LinearOpMode {
 //        telemetry.update();
 
         while (opModeInInit()){
-            List<AprilTagDetection> currentDetections = camLibrary.aprilTagDetectionPipeline.getLatestDetections();
+            List<AprilTagDetection> currentDetections = camLibrary.aprilTagProcessor.getDetections();
 
             // Step through the list of detections and display info for each one.
             for (AprilTagDetection detection : currentDetections) {
@@ -302,21 +303,20 @@ public final class AutoBlueState extends LinearOpMode {
 //
 //    }   // end method telemetryAprilTag()
     class NonDrivingActions {
-        int[] ballColors = {0,0,0,0,0};
         public Action updateTray() {
             return new Action() {
 
                 @Override
                 public boolean run(@NonNull TelemetryPacket packet) {
                     PoseStorage.currentPose = drive.localizer.getPose();
-//                    ballColors = camLibrary.trayPipeline.getBallColors();
+                    int[] ballColors = camLibrary.trayProcessor.getBallColors();
 
                     if (ballColors[0] == 0 || ballColors[1] == 0 || ballColors[2] == 0) {
                         pickUpTimer.reset();
                     }
 
                     if (intake.getPower() != 0){
-                        if (pickUpTimer.milliseconds() > 1000) {
+                        if (pickUpTimer.milliseconds() > 250) {
                             intake.setPower(-1);
                         } else {
                             intake.setPower(1);
@@ -377,7 +377,7 @@ public final class AutoBlueState extends LinearOpMode {
 
                 @Override
                 public boolean run(@NonNull TelemetryPacket packet) {
-                    int[] ballPositions = ballColors;
+                    int[] ballPositions = camLibrary.trayProcessor.getBallColors();
 //                    boolean greenBall = false;
 //                    if (ballPositions[0] == 2 || ballPositions[1] == 2 || ballPositions[2] == 2) {
 //                        greenBall = true;
@@ -437,18 +437,12 @@ public final class AutoBlueState extends LinearOpMode {
                         spinCount ++;
                     }
 
-                    if (camLibrary.aprilTagDetectionPipeline.getDetectionsUpdate() != null) {
-                        camTimer.reset();
-                    }
                     double turnError = 0;
-                    if (camTimer.milliseconds() <= 250){
-                        for (AprilTagDetection detection : camLibrary.aprilTagDetectionPipeline.getLatestDetections()) {
-                            if (detection.id == 20 || detection.id == 24) {
-//                            turnError = Math.toRadians(-detection.bearing);
-                            }
+                    for (AprilTagDetection detection : camLibrary.aprilTagProcessor.getDetections()) {
+                        if (detection.id == 20 || detection.id == 24) {
+                            turnError = Math.toRadians(-detection.ftcPose.bearing);
                         }
                     }
-
 //                    double turnPower = shootLineUpController.update(turnError, 0);
 //                    front_l.setPower(turnPower * -.7);
 //                    back_l.setPower(turnPower * -.7);

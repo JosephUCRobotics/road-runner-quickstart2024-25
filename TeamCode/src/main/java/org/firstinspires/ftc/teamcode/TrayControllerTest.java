@@ -23,6 +23,8 @@ public class TrayControllerTest extends LinearOpMode {
                     trayController.spinLeft();
                 } else if (gamepad1.rightBumperWasPressed()) {
                     trayController.spinRight();
+                } else if (gamepad1.rightBumperWasPressed()) {
+                    trayController.spinRight();
                 }
 
 

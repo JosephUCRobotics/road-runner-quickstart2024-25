@@ -12,7 +12,7 @@ import org.openftc.apriltag.AprilTagDetection;
 import java.util.ArrayList;
 
 @TeleOp
-public class PipelineLibraryTest extends LinearOpMode
+public class FreezTesst extends LinearOpMode
 {
 
     static final double FEET_PER_METER = 3.28084;

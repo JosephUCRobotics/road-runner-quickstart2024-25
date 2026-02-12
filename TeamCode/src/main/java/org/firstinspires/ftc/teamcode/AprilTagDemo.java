@@ -30,6 +30,7 @@ import org.firstinspires.ftc.robotcore.external.navigation.AxesOrder;
 import org.firstinspires.ftc.robotcore.external.navigation.AxesReference;
 import org.firstinspires.ftc.robotcore.external.navigation.Orientation;
 import org.openftc.apriltag.AprilTagDetection;
+import org.openftc.apriltag.AprilTagPose;
 import org.openftc.easyopencv.OpenCvCamera;
 import org.openftc.easyopencv.OpenCvCameraFactory;
 import org.openftc.easyopencv.OpenCvCameraRotation;
@@ -69,7 +70,7 @@ public class AprilTagDemo extends LinearOpMode
     public void runOpMode()
     {
         int cameraMonitorViewId = hardwareMap.appContext.getResources().getIdentifier("cameraMonitorViewId", "id", hardwareMap.appContext.getPackageName());
-        camera = OpenCvCameraFactory.getInstance().createWebcam(hardwareMap.get(WebcamName.class, "Webcam 1"), cameraMonitorViewId);
+        camera = OpenCvCameraFactory.getInstance().createWebcam(hardwareMap.get(WebcamName.class, "Webcam 2"), cameraMonitorViewId);
         aprilTagDetectionPipeline = new AprilTagDetectionPipeline(tagsize, fx, fy, cx, cy);
 
         camera.setPipeline(aprilTagDetectionPipeline);
@@ -142,6 +143,10 @@ public class AprilTagDemo extends LinearOpMode
                         telemetry.addLine(String.format("Rotation Yaw: %.2f degrees", rot.firstAngle));
                         telemetry.addLine(String.format("Rotation Pitch: %.2f degrees", rot.secondAngle));
                         telemetry.addLine(String.format("Rotation Roll: %.2f degrees", rot.thirdAngle));
+                        telemetry.addLine("");
+                        double distance = convertApriltagPosToFlatDistance(detection.pose);
+
+                        telemetry.addData("Distance", distance);
                     }
                 }
 
@@ -150,5 +155,8 @@ public class AprilTagDemo extends LinearOpMode
 
             sleep(20);
         }
+    }
+    double convertApriltagPosToFlatDistance(AprilTagPose pose) {
+        return Math.sqrt(Math.pow(     Math.sqrt(Math.pow(pose.x,2)+Math.pow(pose.y,2)+Math.pow(pose.z,2))    ,2)-Math.pow(16.25,2));
     }
 }

@@ -7,108 +7,140 @@ import org.opencv.core.Point;
 import org.opencv.core.Scalar;
 import org.opencv.core.Size;
 import org.opencv.imgproc.Imgproc;
-import org.openftc.apriltag.AprilTagDetection;
 import org.openftc.easyopencv.OpenCvPipeline;
 import org.opencv.core.Rect;
 
-import java.util.ArrayList;
-
-class TrayPipeline extends OpenCvPipeline
-{
-    private long nativeApriltagPtr;
-
+class TrayPipeline extends OpenCvPipeline {
     Mat cameraMatrix;
 
-    double fx;
-    double fy;
-    double cx;
-    double cy;
+    double fx, fy, cx, cy;
 
-    private float decimation;
-    private boolean needToSetDecimation;
-    private final Object decimationSync = new Object();
+    // Region of Interest Rectangles
+    Rect rect1 = new Rect(52, 60, 50, 60);
+    Rect rect2 = new Rect(0, 82, 35, 38);
+    Rect rect3 = new Rect(0, 10, 70, 55);
+    Rect rect1H = new Rect(18, 85, 40, 35);
+    Rect rect2H = new Rect(0, 28, 35, 55);
+    Rect rect3H = new Rect(45, 25, 55, 50);
+    Rect rect4 = new Rect(150, 70, 10, 50);
+    Rect rect5 = new Rect(127, 30, 25, 30);
 
-//                  2
-//                1   3
-//                 4 5
-//                intake
-    Rect rect1 = new Rect(52,60,50,60);
-    Rect rect2 = new Rect(0,82,35,38);
-    Rect rect3 = new Rect(0,10,70,55);
-    Rect rect4 = new Rect(150,70,10,50);
-    Rect rect5 = new Rect(127,30,25,30);
-    int[] ballColors = {0,0,0,0,0};
+    int[] ballColors = {0, 0, 0, 0, 0};
+    boolean trayIsHalfOff = false;
 
-    public TrayPipeline(double fx, double fy, double cx, double cy)
-    {
-        this.fx = fx;
-        this.fy = fy;
-        this.cx = cx;
-        this.cy = cy;
+    // Reusable Mats to prevent memory churn
+    Mat colorMat = new Mat();
+    Mat aChannel = new Mat();
+    Mat purpleThreshold = new Mat();
+    Mat greenThreshold = new Mat();
+    Mat mask = new Mat();
 
+    Mat purpleOval1 = new Mat(), greenOval1 = new Mat();
+    Mat purpleOval2 = new Mat(), greenOval2 = new Mat();
+    Mat purpleOval3 = new Mat(), greenOval3 = new Mat();
+    Mat purpleRect4 = new Mat(), greenRect4 = new Mat();
+    Mat purpleRect5 = new Mat(), greenRect5 = new Mat();
+
+    long zone1Size, zone2Size, zone3Size, zone4Size, zone5Size;
+    double purplePixelPrecent1, greenPixelPrecent1, purplePixelPrecent2, greenPixelPrecent2;
+    double purplePixelPrecent3, greenPixelPrecent3, purplePixelPrecent4, greenPixelPrecent4;
+    double purplePixelPrecent5, greenPixelPrecent5;
+
+    long lastProcessingTime = 0;
+
+    public TrayPipeline(double fx, double fy, double cx, double cy) {
+        this.fx = fx; this.fy = fy; this.cx = cx; this.cy = cy;
         constructMatrix();
     }
 
     @Override
-    public void finalize()
-    {
-        // Might be null if createApriltagDetector() threw an exception
-        if(nativeApriltagPtr != 0)
-        {
-            // Delete the native context we created in the constructor
-            nativeApriltagPtr = 0;
-        }
-        else
-        {
-            System.out.println("AprilTagDetectionPipeline.finalize(): nativeApriltagPtr was NULL");
-        }
-    }
+    public Mat processFrame(Mat input) {
+//        long currentTime = System.currentTimeMillis();
+//        if (currentTime - lastProcessingTime < 100) return input;
+//        lastProcessingTime = currentTime;
 
-    @Override
-    public Mat processFrame(Mat input)
-    {
-
-//        Was BGR2Lab in tray processor
-        Mat colorMat = new Mat();
+        // 1. Color Conversion
         Imgproc.cvtColor(input, colorMat, Imgproc.COLOR_RGB2Lab);
-
-        Mat aChannel = new Mat();
         Core.extractChannel(colorMat, aChannel, 1);
 
-        Mat purpleThreshold = new Mat();
+        // 2. Thresholding
         Imgproc.threshold(aChannel, purpleThreshold, 145, 255, Imgproc.THRESH_BINARY);
-
-        Mat greenThreshold = new Mat();
         Imgproc.threshold(aChannel, greenThreshold, 113, 255, Imgproc.THRESH_BINARY_INV);
 
-        Mat purpleOval1 = convertToOvalMat(new Mat(purpleThreshold, rect1));
-        Mat greenOval1 = convertToOvalMat(new Mat(greenThreshold, rect1));
-        Mat purpleOval2 = new Mat(purpleThreshold, rect2);
-        Mat greenOval2 = new Mat(greenThreshold, rect2);
-        Mat purpleOval3 = convertToOvalMat(new Mat(purpleThreshold, rect3));
-        Mat greenOval3 = convertToOvalMat(new Mat(greenThreshold, rect3));
-        Mat purpleRect4 = new Mat(purpleThreshold, rect4);
-        Mat greenRect4 = new Mat(greenThreshold, rect4);
-        Mat purpleRect5 = convertToOvalMat(new Mat(purpleThreshold, rect5));
-        Mat greenRect5 = convertToOvalMat(new Mat(greenThreshold, rect5));
+        // 3. Zone Processing with Automatic Submat Release
 
-        long zone1Size = purpleOval1.total();
-        long zone2Size = purpleOval2.total();
-        long zone3Size = purpleOval3.total();
-        long zone4Size = purpleRect4.total();
-        long zone5Size = purpleRect5.total();
+        processZone(purpleThreshold, greenThreshold, trayIsHalfOff ? rect1H : rect1, purpleOval1, greenOval1, true);
+        processZone(purpleThreshold, greenThreshold, trayIsHalfOff ? rect2H : rect2, purpleOval2, greenOval2, !trayIsHalfOff); // Use copyTo if not half off
+        processZone(purpleThreshold, greenThreshold, trayIsHalfOff ? rect3H : rect3, purpleOval3, greenOval3, true);
 
-        double purplePixelPrecent1 = (double) Core.countNonZero(purpleOval1) / zone1Size;
-        double greenPixelPrecent1 = (double) Core.countNonZero(greenOval1) / zone1Size;
-        double purplePixelPrecent2 = (double) Core.countNonZero(purpleOval2) / zone2Size;
-        double greenPixelPrecent2 = (double) Core.countNonZero(greenOval2) / zone2Size;
-        double purplePixelPrecent3 = (double) Core.countNonZero(purpleOval3) / zone3Size;
-        double greenPixelPrecent3 = (double) Core.countNonZero(greenOval3) / zone3Size;
-        double purplePixelPrecent4 = (double) Core.countNonZero(purpleRect4) / zone4Size;
-        double greenPixelPrecent4 = (double) Core.countNonZero(greenRect4) / zone4Size;
-        double purplePixelPrecent5 = (double) Core.countNonZero(purpleRect5) / zone5Size;
-        double greenPixelPrecent5 = (double) Core.countNonZero(greenRect5) / zone5Size;
+        // Rect 4 and 5
+        processZone(purpleThreshold, greenThreshold, rect4, purpleRect4, greenRect4, false); // Rects use copyTo
+        processZone(purpleThreshold, greenThreshold, rect5, purpleRect5, greenRect5, true);  // Oval
 
+        // 4. Analysis
+        updatePercentages();
+        calculateBallColors();
+
+        return input;
+    }
+
+    /**
+     * Helper to handle submat creation, processing, and mandatory release.
+     */
+    Mat pSub = new Mat();
+    Mat gSub = new Mat();
+    private void processZone(Mat purpSrc, Mat greenSrc, Rect roi, Mat purpDst, Mat greenDst, boolean asOval) {
+        purpSrc.submat(roi).copyTo(pSub);
+        greenSrc.submat(roi).copyTo(gSub);
+
+        if (asOval) {
+            convertToOvalMatInternal(pSub, purpDst);
+            convertToOvalMatInternal(gSub, greenDst);
+        } else {
+            pSub.copyTo(purpDst);
+            gSub.copyTo(greenDst);
+        }
+
+        // CRITICAL: Prevent the memory leak
+        pSub.release();
+        gSub.release();
+    }
+
+    private void convertToOvalMatInternal(Mat src, Mat dst) {
+        mask.setTo(new Scalar(0));
+        if (mask.rows() != src.rows() || mask.cols() != src.cols()) {
+            mask.release();
+            mask.create(src.size(), CvType.CV_8U);
+        }
+
+        Point center = new Point(src.cols() / 2.0, src.rows() / 2.0);
+        Size axes = new Size(src.cols() / 2.0, src.rows() / 2.0);
+        Imgproc.ellipse(mask, center, axes, 0, 0, 360, new Scalar(255), -1);
+
+        dst.setTo(new Scalar(0));
+        src.copyTo(dst, mask);
+    }
+
+    private void updatePercentages() {
+        zone1Size = purpleOval1.total();
+        zone2Size = purpleOval2.total();
+        zone3Size = purpleOval3.total();
+        zone4Size = purpleRect4.total();
+        zone5Size = purpleRect5.total();
+
+        purplePixelPrecent1 = (double) Core.countNonZero(purpleOval1) / zone1Size;
+        greenPixelPrecent1 = (double) Core.countNonZero(greenOval1) / zone1Size;
+        purplePixelPrecent2 = (double) Core.countNonZero(purpleOval2) / zone2Size;
+        greenPixelPrecent2 = (double) Core.countNonZero(greenOval2) / zone2Size;
+        purplePixelPrecent3 = (double) Core.countNonZero(purpleOval3) / zone3Size;
+        greenPixelPrecent3 = (double) Core.countNonZero(greenOval3) / zone3Size;
+        purplePixelPrecent4 = (double) Core.countNonZero(purpleRect4) / zone4Size;
+        greenPixelPrecent4 = (double) Core.countNonZero(greenRect4) / zone4Size;
+        purplePixelPrecent5 = (double) Core.countNonZero(purpleRect5) / zone5Size;
+        greenPixelPrecent5 = (double) Core.countNonZero(greenRect5) / zone5Size;
+    }
+
+    private void calculateBallColors() {
         if (purplePixelPrecent1 > .2 || greenPixelPrecent1 > .2) {
             if (purplePixelPrecent1 >= greenPixelPrecent1) {
                 ballColors[0] = 1;
@@ -161,79 +193,36 @@ class TrayPipeline extends OpenCvPipeline
             ballColors[3] = 0;
             ballColors[4] = 0;
         }
-
-        return input;
     }
 
-    public static Mat convertToOvalMat(Mat src) {
-        // 1. Create a black mask with the same size as the source image
-        // The mask must be a single-channel (CV_8U) matrix.
-        Mat mask = new Mat(src.rows(), src.cols(), CvType.CV_8U, new Scalar(0));
+    void constructMatrix() {
+        if (cameraMatrix != null) cameraMatrix.release();
+        cameraMatrix = new Mat(3, 3, CvType.CV_32FC1);
+        cameraMatrix.put(0, 0, fx, 0, cx, 0, fy, cy, 0, 0, 1);
+    }
 
-        // 2. Define the parameters for the ellipse
-        Point center = new Point(src.cols() / 2, src.rows() / 2);
-        // Axes lengths (major and minor radii)
-        Size axes = new Size(src.cols() / 2, src.rows() / 2);
-        double angle = 0.0; // Angle of rotation of the ellipse
-        double startAngle = 0.0;
-        double endAngle = 360.0; // 0 to 360 degrees for a full ellipse
-        Scalar color = new Scalar(255); // White color for the filled area
-        int thickness = -1; // -1 to fill the ellipse
-        int lineType = 8;
-        int shift = 0;
+    public int[] getBallColors() { return ballColors; }
+    public void setTrayIsHalfOffTo(boolean halfOff) { trayIsHalfOff = halfOff; }
 
-        // Draw a filled white ellipse on the black mask
-        Imgproc.ellipse(mask, center, axes, angle, startAngle, endAngle, color, thickness, lineType, shift);
-
-        // 3. Create a destination Mat for the result, initialized to black
-        Mat result = new Mat(src.rows(), src.cols(), src.type(), new Scalar(0, 0, 0));
-
-        // 4. Apply the mask: copy the source image pixels to the result image where the mask is white
-        src.copyTo(result, mask);
-
-        // Release the mask Mat as it's no longer needed
+    @Override
+    public void onViewportTapped() {
+        // This is for if you stop the program but don't restart the robot
+        // This is a good place to release everything if the pipeline is ever closed
+        cameraMatrix.release();
+        colorMat.release();
+        aChannel.release();
+        purpleThreshold.release();
+        greenThreshold.release();
         mask.release();
-
-        return result;
-    }
-
-    public int[] getBallColors(){
-        return ballColors;
-    }
-
-
-    public void setDecimation(float decimation)
-    {
-        synchronized (decimationSync)
-        {
-            this.decimation = decimation;
-            needToSetDecimation = true;
-        }
-    }
-
-    void constructMatrix()
-    {
-        //     Construct the camera matrix.
-        //
-        //      --         --
-        //     | fx   0   cx |
-        //     | 0    fy  cy |
-        //     | 0    0   1  |
-        //      --         --
-        //
-
-        cameraMatrix = new Mat(3,3, CvType.CV_32FC1);
-
-        cameraMatrix.put(0,0, fx);
-        cameraMatrix.put(0,1,0);
-        cameraMatrix.put(0,2, cx);
-
-        cameraMatrix.put(1,0,0);
-        cameraMatrix.put(1,1,fy);
-        cameraMatrix.put(1,2,cy);
-
-        cameraMatrix.put(2, 0, 0);
-        cameraMatrix.put(2,1,0);
-        cameraMatrix.put(2,2,1);
+        purpleOval1.release();
+        purpleOval2.release();
+        purpleOval3.release();
+        purpleRect4.release();
+        purpleRect5.release();
+        greenOval1.release();
+        greenOval2.release();
+        greenOval3.release();
+        greenRect4.release();
+        greenRect5.release();
     }
 }

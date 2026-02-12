@@ -67,6 +67,7 @@ class AprilTagDetectionPipeline extends OpenCvPipeline
     private float decimation;
     private boolean needToSetDecimation;
     private final Object decimationSync = new Object();
+    double distance = 0;
 
     public AprilTagDetectionPipeline(double tagsize, double fx, double fy, double cx, double cy)
     {
@@ -100,9 +101,19 @@ class AprilTagDetectionPipeline extends OpenCvPipeline
         }
     }
 
+    long currentTime = 0;
+    long lastProcessingTime = 0;
+
     @Override
     public Mat processFrame(Mat input)
     {
+        currentTime = System.currentTimeMillis();
+
+        // If 250ms haven't passed, just return the raw frame without processing
+        if (currentTime - lastProcessingTime < 100) {
+            return input;
+        }
+        lastProcessingTime = currentTime;
         // Convert to greyscale
         Imgproc.cvtColor(input, grey, Imgproc.COLOR_RGBA2GRAY);
 
@@ -126,14 +137,16 @@ class AprilTagDetectionPipeline extends OpenCvPipeline
         // For fun, use OpenCV to draw 6DOF markers on the image.
         for(AprilTagDetection detection : detections)
         {
-            Pose pose = aprilTagPoseToOpenCvPose(detection.pose);
+//            Pose pose = aprilTagPoseToOpenCvPose(detection.pose);
             //Pose pose = poseFromTrapezoid(detection.corners, cameraMatrix, tagsizeX, tagsizeY);
-            drawAxisMarker(input, tagsizeY/2.0, 6, pose.rvec, pose.tvec, cameraMatrix);
-            draw3dCubeMarker(input, tagsizeX, tagsizeX, tagsizeY, 5, pose.rvec, pose.tvec, cameraMatrix);
+//            drawAxisMarker(input, tagsizeY/2.0, 6, pose.rvec, pose.tvec, cameraMatrix);
+//            draw3dCubeMarker(input, tagsizeX, tagsizeX, tagsizeY, 5, pose.rvec, pose.tvec, cameraMatrix);
         }
 
         return input;
     }
+
+
 
     public void setDecimation(float decimation)
     {

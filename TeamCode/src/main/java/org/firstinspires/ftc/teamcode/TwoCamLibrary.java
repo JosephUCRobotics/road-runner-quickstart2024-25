@@ -140,7 +140,7 @@ public class TwoCamLibrary {
 //                .addProcessor(aprilTagProcessor2)
                 .addProcessor(trayProcessor)
                 .setStreamFormat(VisionPortal.StreamFormat.MJPEG)
-                .enableLiveView(false)
+//                .enableLiveView(false)
                 .build();
         exposureTimer.reset();
 
@@ -156,7 +156,7 @@ public class TwoCamLibrary {
                         .setLiveViewContainerId(portal2ViewId)
                         .addProcessor(aprilTagProcessor)
                         .setStreamFormat(VisionPortal.StreamFormat.MJPEG)
-                        .enableLiveView(false)
+//                        .enableLiveView(false)
                         .build();
 
 //        while (portal1.getCameraState() != CameraState.STREAMING || portal2.getCameraState() != CameraState.STREAMING) {

@@ -3,10 +3,13 @@ package org.firstinspires.ftc.teamcode;
 import com.qualcomm.robotcore.hardware.CRServo;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.HardwareMap;
+import com.qualcomm.robotcore.util.ElapsedTime;
 
 import org.firstinspires.ftc.robotcore.external.Telemetry;
 
 public class TrayController {
+
+    ElapsedTime jamTime = new ElapsedTime();
     private CRServo tray;
     private DcMotor intake;
     private PIDController servoController;
@@ -18,7 +21,7 @@ public class TrayController {
 //    Telemetry telemetry;
     int targetColor = 5;
 
-    double maxPower = .35;
+    double maxPower = .5;
     double spinAmount = 8192/3;
 
     TrayController(HardwareMap hardwareMap){
@@ -36,6 +39,8 @@ public class TrayController {
             magPos += spinAmount;
         }
         magPos = intake.getCurrentPosition()-magPos;
+
+        jamTime.reset();
 
     }
     void update(){
@@ -58,7 +63,18 @@ public class TrayController {
     }
     void update(int[] zoneColorsIn){
         zoneColors = zoneColorsIn;
-        if (autoSort) {
+        double intakePos = intake.getCurrentPosition();
+        if (Math.abs(magPos - intakePos) < 100) {
+            jamTime.reset();
+        }
+        if (jamTime.milliseconds() > 750){
+            if (intakePos > magPos) {
+                spinLeft_half();
+            } else {
+                spinRight_half();
+            }
+            jamTime.reset();
+        } else if (autoSort) {
             sortWithCam();
         }
 
@@ -70,7 +86,7 @@ public class TrayController {
 //        telemetry.addData("Zone 4", zoneColors[3]);
 //        telemetry.addData("Zone 5", zoneColors[4]);
 //        telemetry.update();
-        double power = servoController.update(magPos, intake.getCurrentPosition());
+        double power = servoController.update(magPos, intakePos);
         if (power > maxPower){
             power = maxPower;
         } else if (power < -maxPower) {
@@ -84,22 +100,71 @@ public class TrayController {
     }
 
     void spinLeft(){
-        maxPower = .35;
-        magPos += spinAmount;
-        servoController.resetTimer();
-        zoneColors = new int[]{zoneColors[1], zoneColors[2], zoneColors[0], zoneColors[3], zoneColors[4]};
+        if (tryPosHalfOff()){
+            spinLeft_half();
+        } else {
+            maxPower = .5;
+            magPos += spinAmount;
+            servoController.resetTimer();
+            zoneColors = new int[]{zoneColors[1], zoneColors[2], zoneColors[0], zoneColors[3], zoneColors[4]};
+        }
     }
     void spinLeft(double maxPow){
+        if (tryPosHalfOff()){
+            spinLeft_half(maxPow);
+        } else {
+            maxPower = maxPow;
+            magPos += spinAmount;
+            servoController.resetTimer();
+            zoneColors = new int[]{zoneColors[1], zoneColors[2], zoneColors[0], zoneColors[3], zoneColors[4]};
+        }
+    }
+    void spinLeft_half(double maxPow){
         maxPower = maxPow;
-        magPos += spinAmount;
+        magPos += spinAmount*.5;
         servoController.resetTimer();
         zoneColors = new int[]{zoneColors[1], zoneColors[2], zoneColors[0], zoneColors[3], zoneColors[4]};
     }
-    void spinRight(){
-        maxPower = .35;
-        magPos -= spinAmount;
+
+    void spinLeft_half(){
+        maxPower = .5;
+        magPos += spinAmount*.5;
         servoController.resetTimer();
-        zoneColors = new int[]{zoneColors[2], zoneColors[0], zoneColors[1], zoneColors[3], zoneColors[4]};
+        zoneColors = new int[]{zoneColors[1], zoneColors[2], zoneColors[0], zoneColors[3], zoneColors[4]};
+    }
+    void spinRight_half(){
+        maxPower = .5;
+        magPos -= spinAmount*.5;
+        servoController.resetTimer();
+    }
+    void spinRight_half(double maxPow){
+        maxPower = maxPow;
+        magPos -= spinAmount*.5;
+        servoController.resetTimer();
+    }
+    boolean tryPosHalfOff(){
+        return Math.abs(magPos % spinAmount) > 30;
+    }
+
+    void spinRight(){
+        if (tryPosHalfOff()){
+            spinRight_half();
+        } else {
+            maxPower = .5;
+            magPos -= spinAmount;
+            servoController.resetTimer();
+            zoneColors = new int[]{zoneColors[2], zoneColors[0], zoneColors[1], zoneColors[3], zoneColors[4]};
+        }
+    }
+    void spinRight(double maxPow){
+        if (tryPosHalfOff()){
+            spinRight_half(maxPow);
+        } else {
+            maxPower = maxPow;
+            magPos -= spinAmount;
+            servoController.resetTimer();
+            zoneColors = new int[]{zoneColors[2], zoneColors[0], zoneColors[1], zoneColors[3], zoneColors[4]};
+        }
     }
 
     void setAutoSortTo(boolean trueOrFalse){
@@ -111,7 +176,7 @@ public class TrayController {
         magPos = 0;
     }
     void sortWithCam(){
-        if (Math.abs(magPos-intake.getCurrentPosition()) < 300) {
+        if (Math.abs(magPos-intake.getCurrentPosition()) < 100) {
             if (zoneColors[0] == 0 || zoneColors[1] == 0 || zoneColors[2] == 0) {
                 if (zoneColors[1] == 0) {
                     if ((zoneColors[4] == 0)){
@@ -128,14 +193,27 @@ public class TrayController {
                         }
                     }
                 } else if (zoneColors[4] > 0) {
-                    if (zoneColors[2] > 0) {
-                        spinLeft();
+                    if (tryPosHalfOff()){
+                        if (zoneColors[2] > 0) {
+                            spinLeft_half();
+                            spinLeft_half();
+                        }
+                    } else {
+                        if (zoneColors[2] > 0) {
+                            spinLeft_half();
+                        } else {
+                            spinRight_half();
+                        }
                     }
                 } else {
                     if (zoneColors[0] > 0) {
                         spinRight();
+                    } else if (tryPosHalfOff()){
+                        spinRight();
                     }
                 }
+            } else if (tryPosHalfOff()) {
+                spinRight();
             }
         }
     }
@@ -234,6 +312,28 @@ public class TrayController {
             } else if (rightScore > centerScore) {
                 spinRight();
             }
+    }
+    void spinToShootReady(double maxPow) {
+
+//            Convert the string into a list of numbers.    "GPP" -> {2, 1, 1}
+        code = code.toUpperCase();
+        int[] numberCode = {0, 0, 0};
+        for (int i = 0; i < code.length(); i++) {
+            char character = code.charAt(i);
+            if (character == 'P') {
+                numberCode[i] = 1;
+            } else if (character == 'G') {
+                numberCode[i] = 2;
+            }
+        }
+        int centerScore = scoreBallPos(numberCode, new int[] {zoneColors[0], zoneColors[1], zoneColors[2]});
+        int leftScore = scoreBallPos(numberCode, new int[] {zoneColors[1], zoneColors[2], zoneColors[0]});
+        int rightScore = scoreBallPos(numberCode, new int[] {zoneColors[2], zoneColors[0], zoneColors[1]});
+        if (leftScore > rightScore && leftScore > centerScore) {
+            spinLeft(maxPow);
+        } else if (rightScore > centerScore) {
+            spinRight(maxPow);
+        }
     }
     int scoreBallPos(int[] target, int[] test) {
         int score = 0;

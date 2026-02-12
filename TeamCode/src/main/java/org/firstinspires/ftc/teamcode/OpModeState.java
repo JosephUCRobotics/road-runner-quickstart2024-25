@@ -1,11 +1,14 @@
 package org.firstinspires.ftc.teamcode;
 
+import android.os.Debug;
+
 import com.acmerobotics.dashboard.FtcDashboard;
 import com.acmerobotics.dashboard.config.Config;
 import com.acmerobotics.dashboard.telemetry.MultipleTelemetry;
 import com.acmerobotics.roadrunner.Action;
 import com.acmerobotics.roadrunner.Pose2d;
 import com.acmerobotics.roadrunner.Vector2d;
+import com.qualcomm.hardware.lynx.LynxModule;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
@@ -13,8 +16,17 @@ import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
+import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
+import org.firstinspires.ftc.robotcore.external.navigation.AxesOrder;
+import org.firstinspires.ftc.robotcore.external.navigation.AxesReference;
+import org.firstinspires.ftc.robotcore.external.navigation.Orientation;
 import org.firstinspires.ftc.vision.VisionPortal;
-import org.firstinspires.ftc.vision.apriltag.AprilTagDetection;
+//import org.firstinspires.ftc.vision.apriltag.AprilTagDetection;
+import org.firstinspires.ftc.vision.apriltag.AprilTagGameDatabase;
+import org.firstinspires.ftc.vision.apriltag.AprilTagLibrary;
+import org.firstinspires.ftc.vision.apriltag.AprilTagMetadata;
+import org.openftc.apriltag.AprilTagDetection;
+import org.openftc.apriltag.AprilTagPose;
 
 import java.lang.annotation.Target;
 import java.util.ArrayList;
@@ -24,9 +36,10 @@ import java.util.List;
 @Config
 @TeleOp(name="Driver State")
 public class OpModeState extends LinearOpMode {
+    static final double FEET_PER_METER = 3.28084;
     MecanumDrive drive;
-    private DcMotor shoot_top;
-    private DcMotor shoot_main;
+    private DcMotorEx shoot_top;
+    private DcMotorEx shoot_main;
     private DcMotor back_l;
     private DcMotor front_r;
     private DcMotor back_r;
@@ -48,13 +61,13 @@ public class OpModeState extends LinearOpMode {
 
     public static double shooterTuner_topShootVelocity = 1350;
     public static double shooterTuner_mainShootVelocity = 1350;
-    public static double shooterTuner_topP = 0.001;
-    public static double shooterTuner_topI = 0.00001;
-    public static double shooterTuner_topD = 0.00001;
+    public static double shooterTuner_topP = 0.0009;
+    public static double shooterTuner_topI = 0.00008;
+    public static double shooterTuner_topD = 0.0000;
     public static double shooterTuner_topF = 0.00042;
     public static double shooterTuner_mainP = 0.006;
-    public static double shooterTuner_mainI = 0.00005;
-    public static double shooterTuner_mainD = 0.00005;
+    public static double shooterTuner_mainI = 0.0000;
+    public static double shooterTuner_mainD = 0.00008;
     public static double shooterTuner_mainF = 0.00042;
     public  static double drivep = 0.03;
     public  static double drivei = 0;
@@ -62,13 +75,18 @@ public class OpModeState extends LinearOpMode {
     public  static double drivef = 0.05;
     public  static double drivemax = 0.8;
     public  static double turnMax = 0.8;
-    public  static double trayMaxPow = .1;
+    public  static double trayMaxPow = .5;
+
+    public  static double leaverTime = 250;
+    public  static double firstShootTime = 600;
+    public  static double waitBetweenBalls = 650;
 
     double barringOffsetOverride = 0;
     double topShootPowOverride = 0;
     double mainShootPowOverride = 0;
 
     boolean cameraCrashed = false;
+    AprilTagLibrary gameTagLibrary = AprilTagGameDatabase.getDecodeTagLibrary();
 
     @Override
     public void runOpMode() throws IllegalStateException{
@@ -78,7 +96,10 @@ public class OpModeState extends LinearOpMode {
         TrayController trayController = new TrayController(hardwareMap);
         trayController.setAutoSortTo(true);
         trayController.setAutoSortTo(false);
-        TwoCamLibrary camLibrary = new TwoCamLibrary(hardwareMap);
+        PipelineLibrary camLibrary = new PipelineLibrary(hardwareMap);
+        AprilTagMetadata blueTag = gameTagLibrary.lookupTag(20);
+        double redTagAngle = -54.05;
+        double bueTagAngle = 54.05;
         ElapsedTime myElapsedTime;
         double Drive_Speed = .7;
 
@@ -99,8 +120,8 @@ public class OpModeState extends LinearOpMode {
         front_l = hardwareMap.get(DcMotor.class, "front_l");
 
 
-        shoot_top = hardwareMap.get(DcMotor.class, "shoot_l");
-        shoot_main = hardwareMap.get(DcMotor.class, "shoot_main");
+        shoot_top = hardwareMap.get(DcMotorEx.class, "shoot_l");
+        shoot_main = hardwareMap.get(DcMotorEx.class, "shoot_main");
         lever = hardwareMap.get(Servo.class, "lever");
 
         shoot_top.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
@@ -133,17 +154,64 @@ public class OpModeState extends LinearOpMode {
         boolean noTagYet = true;
         double totalDriveError = 20;
         boolean noTagsInView = true;
+        double heading = 0;
+        double distanceToTag = 0;
+        double angleToTag = 0;
+        double robotXWithAprilTag = 0;
+        double robotYWithAprilTag = 0;
+
+
 
 //        while (opModeInInit()){
 //            if (!cameraExposerSet){
 //                cameraExposerSet = camLibrary.setExposure();
 //            }
 //        }
+        ElapsedTime loopTimer = new ElapsedTime();
+        double oldTime = 0;
+        double maxLoopTime = 0;
+        telemetry.setMsTransmissionInterval(100);
+
+        List<LynxModule> allHubs = hardwareMap.getAll(LynxModule.class);
+        for (LynxModule hub : allHubs) {
+            hub.setBulkCachingMode(LynxModule.BulkCachingMode.MANUAL);
+        }
 
         waitForStart();
         if (opModeIsActive()) {
             // Put run blocks here.
             while (opModeIsActive()) {
+
+                double thisLoopTime = loopTimer.milliseconds() - oldTime;
+                telemetry.addData("this loop time", thisLoopTime);
+                if (thisLoopTime > maxLoopTime){
+                    maxLoopTime = thisLoopTime;
+                }
+                telemetry.addData("max loop time", maxLoopTime);
+                oldTime = loopTimer.milliseconds();
+                if (oldTime < 3000) {
+                    maxLoopTime = 0;
+                }
+
+
+                Runtime runtime = Runtime.getRuntime();
+
+                long usedMem = (runtime.totalMemory() - runtime.freeMemory()) / (1024 * 1024);
+                long maxMem = runtime.maxMemory() / (1024 * 1024);
+                long nativeMem = Debug.getNativeHeapAllocatedSize() / (1024 * 1024);
+
+                telemetry.addData("Java Used MB", usedMem);
+                telemetry.addData("Java Max MB", maxMem);
+                telemetry.addData("Native MB", nativeMem);
+                telemetry.addData("Free MB", runtime.freeMemory() / (1024 * 1024));
+
+                for (LynxModule hub : allHubs) {
+                    hub.clearBulkCache();
+                }
+
+
+
+
                 try {
     //                if (!cameraExposerSet){
     //                    cameraExposerSet = camLibrary.setExposure();
@@ -162,23 +230,70 @@ public class OpModeState extends LinearOpMode {
                     // Gets The Goals April Tag
                     detectedTag = null;
 
-                    if (camLibrary.camera2IsStreaming()) {
-                        if (aprilTagTimer.milliseconds() > 300) {
-                            ArrayList<AprilTagDetection> freshDetections = (ArrayList<AprilTagDetection>) camLibrary.aprilTagProcessor.getFreshDetections();
-                            if (freshDetections != null) {
+
+
+//                    if (camLibrary.camera2IsStreaming()) {
+//                        if (aprilTagTimer.milliseconds() > 300) {
+//                            ArrayList<AprilTagDetection> freshDetections = (ArrayList<AprilTagDetection>) camLibrary.aprilTagProcessor.getFreshDetections();
+//                            ArrayList<AprilTagDetection> detections = camLibrary.aprilTagDetectionPipeline.getDetectionsUpdate();
+//                    ArrayList<AprilTagDetection> detections = camLibrary.aprilTagDetectionPipeline.getLatestDetections();
+                    ArrayList<AprilTagDetection> detections = null;
+
+
+                    if (detections != null) {
                                 noTagsInView = true;
-                                for (AprilTagDetection detection : freshDetections) {
+                                for (AprilTagDetection detection : detections) {
                                     if (detection.id == 20 || detection.id == 24) {
+                                        Orientation rot = Orientation.getOrientation(detection.pose.R, AxesReference.INTRINSIC, AxesOrder.YXZ, AngleUnit.DEGREES);
+                                        double camAngle = localizerPose.heading.toDouble()-Math.PI*.5;// relieve to up on the feald in roadrunner
+                                        if (!PoseStorage.alianceIsBlue){
+                                            camAngle *= -1;
+                                        }
+
+                                        double camXOffset = -0;
+                                        double camYOffset = 9;
+
+                                        distanceToTag = convertApriltagPosToFlatDistance(detection.pose);
+                                        angleToTag = Math.atan2(detection.pose.x*39.37,distanceToTag);
+
+                                        double xFromTag = Math.cos(camAngle-angleToTag) * distanceToTag;
+                                        double yFromTag = Math.sin(camAngle-angleToTag) * distanceToTag;
+
+                                        double camToRobotX = camYOffset*Math.cos(camAngle) + camXOffset*Math.sin(camAngle);
+                                        double camToRobotY = camXOffset*Math.cos(camAngle) + camYOffset*Math.sin(camAngle);
+                                        // -blueTag.fieldPosition.get(0) gets the position in roadrunner
+                                        robotXWithAprilTag = -blueTag.fieldPosition.get(0)-xFromTag-camToRobotX;
+                                        robotYWithAprilTag =-blueTag.fieldPosition.get(1)-yFromTag-camToRobotY;
+
+
+
+                                        telemetry.addData("distance", distanceToTag);
+//                                        telemetry.addData("yaw", rot.firstAngle);
+//                                        telemetry.addData("heading", Math.toDegrees(heading));
+                                        telemetry.addData("angleToTag", Math.toDegrees(angleToTag));
+//                                        telemetry.addData("xFromTag", xFromTag);
+//                                        telemetry.addData("yFromTag", yFromTag);
+//                                        telemetry.addData("camToRobotX", camToRobotX);
+//                                        telemetry.addData("camToRobotY", camToRobotY);
+//                                        telemetry.addData("TagX", -blueTag.fieldPosition.get(0));
+//                                        telemetry.addData("TagY", -blueTag.fieldPosition.get(1));
+//                                        telemetry.addData("camx", -blueTag.fieldPosition.get(0)-xFromTag);
+//                                        telemetry.addData("camY", -blueTag.fieldPosition.get(1)-yFromTag);
+                                        telemetry.addData("x", robotXWithAprilTag);
+                                        telemetry.addData("Y", robotYWithAprilTag);
+
+
+
                                         noTagsInView = false;
                                         detectedTag = detection;
                                     }
                                 }
                             }
                             aprilTagTimer.reset();
-                        }
-                    } else {
-                        cameraCrashed = true;
-                    }
+//                        }
+//                    } else {
+//                        cameraCrashed = true;
+//                    }
 
 
 
@@ -194,14 +309,21 @@ public class OpModeState extends LinearOpMode {
                         cameraCrashed = false;
                     }
 
+                    heading = localizerPose.heading.toDouble();
+                    if (gamepad1.start){
+                        driverOrientedHeading = heading;
+                    }
+                    heading -= driverOrientedHeading;
 
+//TODO
                     // Update the robot x and y with an estimet from the camera
-                    if (detectedTag != null && Math.abs(totalDriveError) > 2) {
-                        drive.localizer.setPose(new Pose2d(-detectedTag.robotPose.getPosition().x,-detectedTag.robotPose.getPosition().y, localizerPose.heading.toDouble()));
+                    if (detections != null && !noTagsInView && Math.abs(totalDriveError) > 2) {
+                        drive.localizer.setPose(new Pose2d(robotXWithAprilTag,robotYWithAprilTag, localizerPose.heading.toDouble()));
                     }
 
     //                distanceFromGoal = Math.sqrt(Math.pow(tagPose.x - localizerPose.position.x, 2) + Math.pow(tagPose.y - localizerPose.position.y, 2));
                     distanceFromGoal = Math.sqrt(Math.pow(goalPos.x - localizerPose.position.x, 2) + Math.pow(goalPos.y - localizerPose.position.y, 2));
+//                    distanceFromGoal = distanceToTag;
 
 
                     // Calculate the shooters power
@@ -220,8 +342,8 @@ public class OpModeState extends LinearOpMode {
                     telemetry.addData("mainVelocity", mainVelocity);
                     telemetry.addData("topVelocity", topVelocity);
 
-                    double topShootPower = topVelocity*shooterTuner_topF+topShootController.update(topVelocity, ((DcMotorEx) shoot_top).getVelocity());
-                    double mainShootPower = mainVelocity*shooterTuner_mainF+mainShootController.update(mainVelocity, ((DcMotorEx) shoot_main).getVelocity());
+                    double topShootPower = topVelocity*shooterTuner_topF+topShootController.update(topVelocity, shoot_top.getVelocity());
+                    double mainShootPower = mainVelocity*shooterTuner_mainF+mainShootController.update(mainVelocity, shoot_main.getVelocity());
 
 
 
@@ -230,9 +352,16 @@ public class OpModeState extends LinearOpMode {
 
     //                double shootersPower = shootersVelocity/2650+shootController.update(shootersVelocity, ((DcMotorEx) shoot_l).getVelocity());
 
-                    int[] zoneColors = camLibrary.trayProcessor.getBallColors();
+                    telemetry.addData("trayOff", trayController.tryPosHalfOff());
+//                    camLibrary.trayPipeline.setTrayIsHalfOffTo(trayController.tryPosHalfOff());
+//                    int[] zoneColors = camLibrary.trayPipeline.getBallColors();
+                    int[] zoneColors = {0,0,0,0,0};
                     trayController.update(zoneColors);
-    //                trayController.update();
+//                    trayController.update();
+
+
+
+
 
                     if (gamepad1.a) {
                         if (gamepad1.aWasPressed()) {
@@ -241,7 +370,7 @@ public class OpModeState extends LinearOpMode {
                             mainShootController.resetTimer();
                             trayController.setAutoSortTo(false);
                             trayController.setCode(ballPattern);
-                            trayController.spinToShootReady();
+                            trayController.spinToShootReady(trayMaxPow);
 //                            camLibrary.portal1.stopStreaming();
 
                         }
@@ -250,14 +379,17 @@ public class OpModeState extends LinearOpMode {
                         shoot_main.setPower(mainShootPower);
 
 
-                        if (shootTime.milliseconds() > 750) {
+                        if (shootTime.milliseconds() > leaverTime) {
                             lever.setPosition(1);
                         }
-                        if (shootTime.milliseconds() > 1500 && traySpun == 0 || shootTime.milliseconds() > 3000 && traySpun == 1 || shootTime.milliseconds() > 4500 && traySpun == 2) {
-                            trayController.spinLeft(.3);
+                        if (shootTime.milliseconds() > firstShootTime + traySpun * waitBetweenBalls) {
+                            trayController.spinLeft_half(trayMaxPow);
                             traySpun ++;
                         }
                     } else {
+//                        if (trayController.tryPosHalfOff()){
+//                            trayController.spinLeft_half();
+//                        }
                         Drive_Speed = 0.7;
                         shoot_top.setPower(0);
                         shoot_main.setPower(0);
@@ -295,9 +427,9 @@ public class OpModeState extends LinearOpMode {
                         intake.setPower(0);
                     }
                     if (gamepad1.leftBumperWasPressed()) {
-                        trayController.spinLeft();
+                        trayController.spinLeft(trayMaxPow);
                     } else if (gamepad1.rightBumperWasPressed()) {
-                        trayController.spinRight();
+                        trayController.spinRight(trayMaxPow);
                     }
 
 
@@ -308,31 +440,45 @@ public class OpModeState extends LinearOpMode {
     //                        camLibrary.portal2.resumeStreaming();
     //                    }
 
-                        if (camLibrary.portal2 != null) {
-                            if (detectedTag != null){
-    //                        This is what the qualifier version. was i made it positive to get the state to work
-    //                        turnError = Math.toRadians(-detectedTag.ftcPose.bearing);
-                                double barringOffset = barringOffsetOverride;
-                                if (barringOffsetOverride == 0){
-                                    barringOffset = 0.1565 * localizerPose.position.x -5.20615;
-                                }
-
-    //                        telemetry.addData("barringOffset", barringOffset);
-    //                        telemetry.addData("detectedTag.ftcPose.bearing)", detectedTag.ftcPose.bearing);
-
-
-
-                                double newTargetAngle = localizerPose.heading.toDouble()-Math.PI*.5+Math.toRadians(detectedTag.ftcPose.bearing-barringOffset);
-                                if (Math.abs(newTargetAngle - targetAngle) > Math.PI*.02) {
-                                    targetAngle = newTargetAngle;
-                                }
-
-    //                        noTagYet = false;
-                            } else if (/*noTagsInView&& */camLibrary.portal2.getCameraState() == VisionPortal.CameraState.STREAMING) {
-                                if (Math.abs(xPower) + Math.abs(yPower) > .25 || noTagsInView){
-                                    targetAngle = Math.atan2(tagPose.y - localizerPose.position.y, tagPose.x - localizerPose.position.x);
-                                }
+//                        if (camLibrary.portal2 != null) {
+//                            if (detectedTag != null){
+//    //                        This is what the qualifier version. was i made it positive to get the state to work
+//    //                        turnError = Math.toRadians(-detectedTag.ftcPose.bearing);
+//                                double barringOffset = barringOffsetOverride;
+//                                if (barringOffsetOverride == 0){
+//                                    barringOffset = 0.1565 * localizerPose.position.x -5.20615;
+//                                }
+//
+//    //                        telemetry.addData("barringOffset", barringOffset);
+//    //                        telemetry.addData("detectedTag.ftcPose.bearing)", detectedTag.ftcPose.bearing);
+//
+//
+//
+//                                double newTargetAngle = localizerPose.heading.toDouble()-Math.PI*.5+Math.toRadians(detectedTag.ftcPose.bearing-barringOffset);
+//                                if (Math.abs(newTargetAngle - targetAngle) > Math.PI*.02) {
+//                                    targetAngle = newTargetAngle;
+//                                }
+//
+//    //                        noTagYet = false;
+//                            } else if (/*noTagsInView&& */camLibrary.portal2.getCameraState() == VisionPortal.CameraState.STREAMING) {
+//                                if (Math.abs(xPower) + Math.abs(yPower) > .25 || noTagsInView){
+//                                    targetAngle = Math.atan2(tagPose.y - localizerPose.position.y, tagPose.x - localizerPose.position.x);
+//                                }
+//                            }
+//                        }
+                        if (detections != null && !noTagsInView){
+//                            turnError = -angleToTag;
+                            double barringOffset = barringOffsetOverride;
+                            if (barringOffsetOverride == 0){
+                                barringOffset = 0.1565 * localizerPose.position.x -5.20615;
                             }
+
+                            double newTargetAngle = localizerPose.heading.toDouble()-Math.PI*.5+(-angleToTag-Math.toRadians(barringOffset));
+                            if (Math.abs(newTargetAngle - targetAngle) > Math.PI*.02) {
+                                targetAngle = newTargetAngle;
+                            }
+                        } else if (Math.abs(xPower) + Math.abs(yPower) > .25 || noTagsInView){
+                            targetAngle = Math.atan2(tagPose.y - localizerPose.position.y, tagPose.x - localizerPose.position.x);
                         }
 
                         telemetry.addData("targetAngle", targetAngle);
@@ -473,12 +619,6 @@ public class OpModeState extends LinearOpMode {
                         }
                     }
 
-                    double heading = localizerPose.heading.toDouble();
-                    if (gamepad1.start){
-                        driverOrientedHeading = heading;
-                    }
-                    heading -= driverOrientedHeading;
-
                     if (gamepad1.y) {
                         double xTarget = -52;
                         double yTarget = -15;
@@ -593,14 +733,25 @@ public class OpModeState extends LinearOpMode {
                         goalPos = new Vector2d(69, -69);
                     }
 
-
+                    telemetry.addData("Cam1 FPS", camLibrary.camera1.getFps());
+                    telemetry.addData("Cam1 Overhead ms", camLibrary.camera1.getOverheadTimeMs());
+                    telemetry.addData("Cam1 Pipeline ms", camLibrary.camera1.getPipelineTimeMs());
+                    telemetry.addData("", "");
+                    telemetry.addData("Cam2 FPS", camLibrary.camera2.getFps());
+                    telemetry.addData("Cam2 Overhead ms", camLibrary.camera2.getOverheadTimeMs());
+                    telemetry.addData("Cam2 Pipeline ms", camLibrary.camera2.getPipelineTimeMs());
+                    telemetry.addData("", "");
+                    telemetry.addData("Cam3 FPS", camLibrary.camera3.getFps());
+                    telemetry.addData("Cam3 Overhead ms", camLibrary.camera3.getOverheadTimeMs());
+                    telemetry.addData("Cam3 Pipeline ms", camLibrary.camera3.getPipelineTimeMs());
+                    telemetry.addData("", "");
                     telemetry.addData("Ball Code", ballPattern);
                     telemetry.addData("", "");
                     telemetry.addData("topShootTargetVel", shooterTuner_topShootVelocity);
-                    telemetry.addData("topShootCurrentVel", ((DcMotorEx) shoot_top).getVelocity());
+                    telemetry.addData("topShootCurrentVel", shoot_top.getVelocity());
                     telemetry.addData("", "");
                     telemetry.addData("mainShootTargetVel", shooterTuner_mainShootVelocity);
-                    telemetry.addData("mainShootCurrentVel", ((DcMotorEx) shoot_main).getVelocity());
+                    telemetry.addData("mainShootCurrentVel", shoot_main.getVelocity());
                     telemetry.addData("", "");
                     telemetry.addData("Zone 1", zoneColors[0]);
                     telemetry.addData("Zone 2", zoneColors[1]);
@@ -608,6 +759,7 @@ public class OpModeState extends LinearOpMode {
                     telemetry.addData("Zone 4", zoneColors[3]);
                     telemetry.addData("Zone 5", zoneColors[4]);
 
+                    telemetry.addData("trayPos", trayController.magPos);
                     telemetry.addData("turnError", turnError);
                     telemetry.addData("turnPower", turnPower);
                     //todo
@@ -617,9 +769,9 @@ public class OpModeState extends LinearOpMode {
     //                telemetry.addData("heading: ", drive.localizer.getPose().heading.toDouble());
                     if (detectedTag != null) {
                         telemetry.addData("id", detectedTag.id);
-                        if (detectedTag.robotPose != null) {
-                            telemetry.addData("robotPose", detectedTag.robotPose.getPosition().toString());
-                            telemetry.addData("robotAngle", detectedTag.robotPose.getOrientation().toString());
+                        if (detectedTag.pose != null) {
+                            telemetry.addData("robotPose", detectedTag.pose.x*FEET_PER_METER);
+//                            telemetry.addData("robotAngle", detectedTag.robotPose.getOrientation().toString());
                         }
                     }
                     telemetry.addData("angle", localizerPose.heading.toDouble());
@@ -638,11 +790,15 @@ public class OpModeState extends LinearOpMode {
                 }
             }
         }
-        if (camLibrary.portal1 != null){
-            camLibrary.portal1.close();
-        }
-        if (camLibrary.portal2 != null){
-            camLibrary.portal2.close();
-        }
+//        if (camLibrary.portal1 != null){
+//            camLibrary.portal1.close();
+//        }
+//        if (camLibrary.portal2 != null){
+//            camLibrary.portal2.close();
+//        }
+    }
+
+    double convertApriltagPosToFlatDistance(AprilTagPose pose) {
+        return Math.sqrt(Math.pow(     Math.sqrt(Math.pow(pose.x*39.37,2)+Math.pow(pose.y*39.37,2)+Math.pow(pose.z*39.37,2))    ,2)-Math.pow(16.25,2));
     }
 }
